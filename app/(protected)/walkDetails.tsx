@@ -197,7 +197,7 @@ const WalkDetailScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#EDE8D0',
   },
   content: {
     flex: 1,
@@ -315,11 +315,11 @@ const styles = StyleSheet.create({
   },
   mainStatCard: {
     flex: 1,
-    backgroundColor: '#6366F1',
+    backgroundColor: '#660033',
     borderRadius: 16,
     padding: 20,
     alignItems: 'center',
-    shadowColor: '#6366F1',
+    shadowColor: '#660033',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   editButton: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#6366F1',
+    color: '#660033',
   },
   notesCard: {
     backgroundColor: '#FFF',
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
   editButtonLarge: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#6366F1',
+    backgroundColor: '#660033',
     borderRadius: 12,
     padding: 16,
     justifyContent: 'center',

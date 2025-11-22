@@ -4,6 +4,15 @@ import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Alert, Platform } from 'react-native';
 
+// Cross-platform alert helper
+const showAlert = (title: string, message?: string) => {
+    if (Platform.OS === 'web') {
+        window.alert(message ? `${title}\n${message}` : title);
+    } else {
+        Alert.alert(title, message);
+    }
+};
+
 type User = {
     email: string;
     name: string;
@@ -14,6 +23,7 @@ type AuthContextType = {
     token: string | null;
     isLoading: boolean;
     login: (email: string, password: string) => Promise<boolean>;
+    register: (name: string, email: string, password: string) => Promise<boolean>;
     logout: () => Promise<void>;
     isAuthenticated: boolean;
 }
@@ -23,7 +33,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 
-const AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
+// let AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
+// let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+let AUTH_SERVICE_URL = process.env.WEB_AUTH_SERVICE_URL || 'http://localhost:9011';
+let API_SERVICE_URL = process.env.WEB_API_SERVICE_URL || 'http://localhost:9010';
 
 // Storage wrapper that uses SecureStore on native and AsyncStorage on web
 const storage = {
@@ -89,7 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const response = await axios.post(`${AUTH_SERVICE_URL}/oauth2/token`, params, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': 'Basic ZGV2OmRldi1zZWNyZXQ='
+                    'Authorization': 'Basic ZGV2OnNlY3JldA=='
                 }
             });
 
@@ -119,13 +132,51 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (axios.isAxiosError(error) && error.response) {
                 console.error('Response status:', error.response.status);
                 console.error('Response data:', error.response.data);
-                Alert.alert('Login Failed', error.response.data?.message || error.message);
+                showAlert('Login Failed', error.response.data?.message || error.message);
             } else {
-                Alert.alert('Login Failed', 'An unexpected error occurred');
+                showAlert('Login Failed', 'An unexpected error occurred');
             }
             return false;
         } finally {
             // Only set loading false if not already set (on error path)
+            setIsLoading((current) => current ? false : current);
+        }
+    };
+
+    const register = async (name: string, email: string, password: string): Promise<boolean> => {
+        try {
+            setIsLoading(true);
+
+            const response = await axios.post(`${API_SERVICE_URL}/api/v1/users/register`, {
+                name,
+                email,
+                password
+            }, {
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+
+            console.log("Registration results -> ", response.data);
+
+            // After successful registration, automatically log in the user
+            if (response.status === 200 || response.status === 201) {
+                const loginSuccess = await login(email, password);
+                return loginSuccess;
+            }
+
+            return true;
+        } catch (error) {
+            console.error('Registration error:', error);
+            if (axios.isAxiosError(error) && error.response) {
+                console.error('Response status:', error.response.status);
+                console.error('Response data:', error.response.data);
+                showAlert('Registration Failed', error.response.data?.message || error.message);
+            } else {
+                showAlert('Registration Failed', 'An unexpected error occurred');
+            }
+            return false;
+        } finally {
             setIsLoading((current) => current ? false : current);
         }
     };
@@ -154,6 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token,
         isLoading,
         login,
+        register,
         logout,
         isAuthenticated: !!token && !!user,
     };

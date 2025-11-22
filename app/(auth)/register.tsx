@@ -3,6 +3,7 @@ import { memo, useEffect, useRef, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,20 +12,34 @@ import {
 } from "react-native";
 import { useAuth } from "../auth-context";
 
-// Separate form component to avoid re-renders triggering useAuth()
-const LoginForm = memo(({ onSubmit, isLoading }: {
-  onSubmit: (email: string, password: string) => void;
+const RegisterForm = memo(({ onSubmit, isLoading }: {
+  onSubmit: (name: string, email: string, password: string, confirmPassword: string) => void;
   isLoading: boolean;
 }) => {
+    const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [confirmPassword, setConfirmPassword] = useState("");
 
     const handleSubmit = () => {
-      onSubmit(email, password);
+        onSubmit(name, email, password, confirmPassword);
     };
 
     return (
         <View style={styles.form}>
+            <View style={styles.inputContainer}>
+                <Text style={styles.label}>Name</Text>
+                <TextInput
+                style={styles.input}
+                placeholder="Your name"
+                placeholderTextColor="#999"
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+                autoComplete="name"
+                />
+            </View>
+
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Email</Text>
                 <TextInput
@@ -48,13 +63,22 @@ const LoginForm = memo(({ onSubmit, isLoading }: {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
-                autoComplete="password"
+                autoComplete="password-new"
                 />
             </View>
 
-            <TouchableOpacity>
-                <Text style={styles.forgotPassword}>Forgot password?</Text>
-            </TouchableOpacity>
+            <View style={styles.inputContainer}>
+                <Text style={styles.label}>Confirm Password</Text>
+                <TextInput
+                style={styles.input}
+                placeholder="Re-enter your password"
+                placeholderTextColor="#999"
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                secureTextEntry
+                autoComplete="password-new"
+                />
+            </View>
 
             <TouchableOpacity
                 style={[styles.button, isLoading && styles.buttonDisabled]}
@@ -62,29 +86,29 @@ const LoginForm = memo(({ onSubmit, isLoading }: {
                 disabled={isLoading}
             >
                 <Text style={styles.buttonText}>
-                {isLoading ? 'Logging in...' : 'Log In'}
+                {isLoading ? 'Creating account...' : 'Sign Up'}
                 </Text>
             </TouchableOpacity>
 
-            <View style={styles.signupContainer}>
-                <Text style={styles.signupText}>Don't have an account? </Text>
-                <TouchableOpacity onPress={() => router.push("/(auth)/register")}>
-                <Text style={styles.signupLink}>Sign up</Text>
+            <View style={styles.loginContainer}>
+                <Text style={styles.loginText}>Already have an account? </Text>
+                <TouchableOpacity onPress={() => router.back()}>
+                <Text style={styles.loginLink}>Log in</Text>
                 </TouchableOpacity>
             </View>
         </View>
     );
 });
 
-export default function LoginScreen() {
-    const { login, isLoading, isAuthenticated } = useAuth();
-    const loginRef = useRef(login);
-    loginRef.current = login;
+export default function RegisterScreen() {
+    const { register, isLoading, isAuthenticated } = useAuth();
+    const registerRef = useRef(register);
+    registerRef.current = register;
 
-    // Navigate when authentication state changes
+    // Navigate when authentication state changes (after successful registration)
     useEffect(() => {
       if (isAuthenticated) {
-        console.log("User authenticated, redirecting to protected area");
+        console.log("User registered and authenticated, redirecting to protected area");
         const timeout = setTimeout(() => {
           router.replace("/(protected)/(tabs)");
         }, 100);
@@ -92,18 +116,23 @@ export default function LoginScreen() {
       }
     }, [isAuthenticated]);
 
-    const handleLogin = async (email: string, password: string) => {
-        if(!email || !password) {
-          console.log("invalid email or password");
+    const handleRegister = async (name: string, email: string, password: string, confirmPassword: string) => {
+        if(!name || !email || !password || !confirmPassword) {
+          console.log("All fields are required");
             return;
         }
 
-        const success = await loginRef.current(email, password);
+        if(password !== confirmPassword) {
+          console.log("Passwords don't match");
+            return;
+        }
+
+        const success = await registerRef.current(name, email, password);
 
         if (success) {
-          console.log("Login success !!!");
+          console.log("Registration success !!!");
         } else {
-          console.log("Login failed, staying on login screen");
+          console.log("Registration failed, staying on register screen");
         }
     };
 
@@ -113,13 +142,18 @@ export default function LoginScreen() {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.content}
             >
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                keyboardShouldPersistTaps="handled"
+            >
             <View style={styles.header}>
             <Text style={styles.pawIcon}>🐾</Text>
-            <Text style={styles.title}>WalkDog</Text>
-            <Text style={styles.subtitle}>Track every adventure with your pup</Text>
+            <Text style={styles.title}>Join WalkDog</Text>
+            <Text style={styles.subtitle}>Start tracking adventures with your pup</Text>
             </View>
 
-            <LoginForm onSubmit={handleLogin} isLoading={isLoading} />
+            <RegisterForm onSubmit={handleRegister} isLoading={isLoading} />
+            </ScrollView>
             </KeyboardAvoidingView>
         </View>
     );
@@ -132,8 +166,12 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: 'center',
     paddingHorizontal: 24,
+    paddingVertical: 24,
   },
   header: {
     alignItems: 'center',
@@ -174,19 +212,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#E5E5E5',
   },
-  forgotPassword: {
-    color: '#660033',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'right',
-    marginBottom: 24,
-  },
   button: {
     backgroundColor: '#660033',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     marginBottom: 16,
+    marginTop: 8,
   },
   buttonDisabled: {
     opacity: 0.6,
@@ -196,16 +228,16 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
-  signupContainer: {
+  loginContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  signupText: {
+  loginText: {
     color: '#666',
     fontSize: 14,
   },
-  signupLink: {
+  loginLink: {
     color: '#660033',
     fontSize: 14,
     fontWeight: '600',

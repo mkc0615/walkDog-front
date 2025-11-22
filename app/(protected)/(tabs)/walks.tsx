@@ -252,7 +252,7 @@ const MyWalksScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#EDE8D0',
   },
   header: {
     flexDirection: 'row',
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#6366F1',
+    color: '#660033',
     marginBottom: 4,
   },
   summaryLabel: {
@@ -330,8 +330,8 @@ const styles = StyleSheet.create({
     borderColor: '#E5E5E5',
   },
   filterButtonActive: {
-    backgroundColor: '#6366F1',
-    borderColor: '#6366F1',
+    backgroundColor: '#660033',
+    borderColor: '#660033',
   },
   filterText: {
     fontSize: 14,

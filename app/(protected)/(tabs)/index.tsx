@@ -31,8 +31,7 @@ export default function Index() {
   };
 
   const handleStartWalk = () => {
-    // TODO: Navigate to walk tracking screen
-    console.log('Start walk');
+    router.push("/(protected)/startWalk");
   };
 
   const handleLogout = async () => {
@@ -167,7 +166,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#EDE8D0',
   },
   content: {
     flex: 1,
@@ -206,7 +205,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
   },
   startButton: {
-    backgroundColor: '#6366F1',
+    backgroundColor: '#660033',
     marginHorizontal: 20,
     marginBottom: 24,
     borderRadius: 16,
@@ -214,7 +213,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    shadowColor: '#6366F1',
+    shadowColor: '#660033',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
@@ -264,7 +263,7 @@ const styles = StyleSheet.create({
   },
   seeAll: {
     fontSize: 14,
-    color: '#6366F1',
+    color: '#660033',
     fontWeight: '600',
   },
   weeklyCard: {
@@ -283,7 +282,7 @@ const styles = StyleSheet.create({
   weeklyNumber: {
     fontSize: 48,
     fontWeight: 'bold',
-    color: '#6366F1',
+    color: '#660033',
   },
   weeklyLabel: {
     fontSize: 16,
@@ -301,7 +300,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#6366F1',
+    backgroundColor: '#660033',
     borderRadius: 4,
   },
   weeklyGoal: {
