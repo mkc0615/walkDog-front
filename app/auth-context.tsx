@@ -37,6 +37,8 @@ const USER_KEY = 'user_data';
 // let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
 let AUTH_SERVICE_URL = process.env.WEB_AUTH_SERVICE_URL || 'http://localhost:9011';
 let API_SERVICE_URL = process.env.WEB_API_SERVICE_URL || 'http://localhost:9010';
+let CLIENT_ID = process.env.CLIENT_ID || '';
+let CLIENT_PW = process.env.CLIENT_PW || '';
 
 // Storage wrapper that uses SecureStore on native and AsyncStorage on web
 const storage = {
@@ -98,11 +100,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             params.append('username', email);
             params.append('password', password);
             params.append('scope', 'user');
+            
+            const authHeader = encodeBasicAuth(`${CLIENT_ID}`, `${CLIENT_PW}`);
 
             const response = await axios.post(`${AUTH_SERVICE_URL}/oauth2/token`, params, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': 'Basic ZGV2OnNlY3JldA=='
+                    'Authorization': authHeader
                 }
             });
 
@@ -199,6 +203,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(false);
         }
     };
+
+    const encodeBasicAuth = (clientId: string, clientSecret: string) => {
+        const raw = `${clientId}:${clientSecret}`;
+        const encoded = Buffer.from(raw, "utf8").toString("base64");
+        return `Basic ${encoded}`;
+    }
 
     const value: AuthContextType = {
         user,
