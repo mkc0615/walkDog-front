@@ -3,6 +3,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { Alert, Platform } from 'react-native';
+import base64 from 'react-native-base64';
 
 // Cross-platform alert helper
 const showAlert = (title: string, message?: string) => {
@@ -37,8 +38,8 @@ const USER_KEY = 'user_data';
 // let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
 let AUTH_SERVICE_URL = process.env.WEB_AUTH_SERVICE_URL || 'http://localhost:9011';
 let API_SERVICE_URL = process.env.WEB_API_SERVICE_URL || 'http://localhost:9010';
-let CLIENT_ID = process.env.CLIENT_ID || '';
-let CLIENT_PW = process.env.CLIENT_PW || '';
+let CLIENT_ID = process.env.CLIENT_ID || 'dev';
+let CLIENT_PW = process.env.CLIENT_PW || 'secret';
 
 // Storage wrapper that uses SecureStore on native and AsyncStorage on web
 const storage = {
@@ -101,7 +102,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             params.append('password', password);
             params.append('scope', 'user');
             
+            console.log(`${CLIENT_ID}`);
+            console.log(`${CLIENT_PW}`);
             const authHeader = encodeBasicAuth(`${CLIENT_ID}`, `${CLIENT_PW}`);
+            console.log(authHeader);
 
             const response = await axios.post(`${AUTH_SERVICE_URL}/oauth2/token`, params, {
                 headers: {
@@ -206,7 +210,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const encodeBasicAuth = (clientId: string, clientSecret: string) => {
         const raw = `${clientId}:${clientSecret}`;
-        const encoded = Buffer.from(raw, "utf8").toString("base64");
+        const encoded = base64.encode(raw);
         return `Basic ${encoded}`;
     }
 

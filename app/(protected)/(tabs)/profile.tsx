@@ -139,17 +139,17 @@ export default function ProfileScreen() {
 
         {/* Action Buttons */}
         <View style={styles.section}>
-          <TouchableOpacity style={styles.actionButton}>
+          {/* <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionButtonIcon}>🔔</Text>
             <Text style={styles.actionButtonText}>Notifications</Text>
             <Text style={styles.actionButtonArrow}>›</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
-          <TouchableOpacity style={styles.actionButton}>
+          {/* <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionButtonIcon}>⚙️</Text>
             <Text style={styles.actionButtonText}>Settings</Text>
             <Text style={styles.actionButtonArrow}>›</Text>
-          </TouchableOpacity>
+          </TouchableOpacity> */}
 
           <TouchableOpacity style={styles.actionButton}>
             <Text style={styles.actionButtonIcon}>❓</Text>
