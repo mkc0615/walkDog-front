@@ -2,12 +2,12 @@ import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   FlatList,
-  SafeAreaView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 interface Walk {
   id: string;

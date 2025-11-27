@@ -1,28 +1,129 @@
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import * as Location from "expo-location";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  SafeAreaView,
+  Alert,
   StyleSheet,
   Text,
   TouchableOpacity,
   View
 } from "react-native";
+import MapView, { Polyline, UrlTile } from "react-native-maps";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+interface Coordinate {
+  latitude: number;
+  longitude: number;
+}
 
 export default function ActiveWalkScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0); // in seconds
   const [distance, setDistance] = useState(0); // in km
+  const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
+  const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>([]);
+  const [hasLocationPermission, setHasLocationPermission] = useState(false);
+
+  const mapRef = useRef<MapView>(null);
+  const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
   // TODO: Get walk data from route params or context
   const walkingDogs = ["Buddy", "Luna"];
+
+  // Calculate distance between two coordinates using Haversine formula
+  const calculateDistance = (coord1: Coordinate, coord2: Coordinate): number => {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = ((coord2.latitude - coord1.latitude) * Math.PI) / 180;
+    const dLon = ((coord2.longitude - coord1.longitude) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((coord1.latitude * Math.PI) / 180) *
+        Math.cos((coord2.latitude * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  // Check location permissions and start tracking
+  useEffect(() => {
+    let isMounted = true;
+
+    (async () => {
+      // Check if permission is already granted
+      const { status } = await Location.getForegroundPermissionsAsync();
+
+      if (status !== "granted") {
+        Alert.alert(
+          "Location Permission Required",
+          "Please enable location access in your device settings to track your walks.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Open Settings", onPress: () => Location.requestForegroundPermissionsAsync() }
+          ]
+        );
+        return;
+      }
+
+      if (isMounted) {
+        setHasLocationPermission(true);
+
+        // Get initial location
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+
+        const initialCoord = {
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude,
+        };
+
+        setCurrentLocation(initialCoord);
+        setRouteCoordinates([initialCoord]);
+
+        // Start watching location
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            distanceInterval: 5, // Update every 5 meters
+            timeInterval: 1000, // Update every second
+          },
+          (newLocation) => {
+            const newCoord = {
+              latitude: newLocation.coords.latitude,
+              longitude: newLocation.coords.longitude,
+            };
+
+            setCurrentLocation(newCoord);
+
+            if (!isPaused) {
+              setRouteCoordinates((prev) => {
+                const lastCoord = prev[prev.length - 1];
+                if (lastCoord) {
+                  const additionalDistance = calculateDistance(lastCoord, newCoord);
+                  setDistance((prevDistance) => prevDistance + additionalDistance);
+                }
+                return [...prev, newCoord];
+              });
+            }
+          }
+        );
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+      if (locationSubscription.current) {
+        locationSubscription.current.remove();
+      }
+    };
+  }, []);
 
   // Timer for duration
   useEffect(() => {
     if (!isPaused) {
       const interval = setInterval(() => {
         setDuration((prev) => prev + 1);
-        // TODO: Update distance based on GPS coordinates
-        setDistance((prev) => prev + 0.001); // Simulated distance increase
       }, 1000);
 
       return () => clearInterval(interval);
@@ -59,20 +160,49 @@ export default function ActiveWalkScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Map Placeholder */}
+      {/* Map View */}
       <View style={styles.mapContainer}>
-        <View style={styles.mapPlaceholder}>
-          <Text style={styles.mapIcon}>🗺️</Text>
-          <Text style={styles.mapText}>Map View</Text>
-          <Text style={styles.mapSubtext}>
-            GPS tracking active
-          </Text>
-          <View style={styles.coordinatesBox}>
-            <Text style={styles.coordinatesText}>
-              📍 Lat: 37.7749, Long: -122.4194
+        {hasLocationPermission && currentLocation ? (
+          <MapView
+            ref={mapRef}
+            style={styles.map}
+            initialRegion={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            showsUserLocation={true}
+            followsUserLocation={true}
+            showsMyLocationButton={false}
+          >
+            {/* MapTiler Tiles */}
+            <UrlTile
+              urlTemplate={`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAP_TILER_KEY}`}
+              maximumZ={22}
+              flipY={false}
+            />
+
+            {/* Route Polyline */}
+            {routeCoordinates.length > 1 && (
+              <Polyline
+                coordinates={routeCoordinates}
+                strokeColor="#660033"
+                strokeWidth={4}
+                lineCap="round"
+                lineJoin="round"
+              />
+            )}
+          </MapView>
+        ) : (
+          <View style={styles.mapPlaceholder}>
+            <Text style={styles.mapIcon}>🗺️</Text>
+            <Text style={styles.mapText}>Loading Map...</Text>
+            <Text style={styles.mapSubtext}>
+              Requesting location permissions
             </Text>
           </View>
-        </View>
+        )}
 
         {/* Overlay Stats */}
         <View style={styles.topOverlay}>
@@ -82,6 +212,13 @@ export default function ActiveWalkScreen() {
               Walking with {walkingDogs.join(", ")}
             </Text>
           </View>
+        </View>
+
+        {/* Map Attribution */}
+        <View style={styles.attributionOverlay}>
+          <Text style={styles.attributionText}>
+            © MapTiler © OpenStreetMap contributors
+          </Text>
         </View>
       </View>
 
@@ -148,6 +285,9 @@ const styles = StyleSheet.create({
     flex: 1,
     position: "relative",
   },
+  map: {
+    flex: 1,
+  },
   mapPlaceholder: {
     flex: 1,
     backgroundColor: "#E5E7EB",
@@ -212,6 +352,19 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#1A1A1A",
     flex: 1,
+  },
+  attributionOverlay: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  attributionText: {
+    fontSize: 10,
+    color: "#333",
   },
   statsContainer: {
     flexDirection: "row",

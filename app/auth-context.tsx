@@ -36,8 +36,8 @@ const USER_KEY = 'user_data';
 
 // let AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
 // let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
-let AUTH_SERVICE_URL = process.env.WEB_AUTH_SERVICE_URL || 'http://localhost:9011';
-let API_SERVICE_URL = process.env.WEB_API_SERVICE_URL || 'http://localhost:9010';
+let AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
+let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
 let CLIENT_ID = process.env.CLIENT_ID || 'dev';
 let CLIENT_PW = process.env.CLIENT_PW || 'secret';
 

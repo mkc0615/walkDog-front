@@ -1,6 +1,8 @@
 import { router } from "expo-router";
+import * as Location from "expo-location";
 import { memo, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -102,6 +104,20 @@ export default function LoginScreen() {
 
         if (success) {
           console.log("Login success !!!");
+
+          // Request location permissions after successful login
+          try {
+            const { status } = await Location.requestForegroundPermissionsAsync();
+            if (status !== "granted") {
+              Alert.alert(
+                "Location Permission",
+                "Location access is needed to track your dog walks. You can enable it later in Settings.",
+                [{ text: "OK" }]
+              );
+            }
+          } catch (error) {
+            console.log("Error requesting location permission:", error);
+          }
         } else {
           console.log("Login failed, staying on login screen");
         }
