@@ -138,8 +138,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
             console.error('Login error:', error);
             if (axios.isAxiosError(error) && error.response) {
-                console.error('Response status:', error.response.status);
-                console.error('Response data:', error.response.data);
                 showAlert('Login Failed', error.response.data?.message || error.message);
             } else {
                 showAlert('Login Failed', 'An unexpected error occurred');
@@ -177,8 +175,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
             console.error('Registration error:', error);
             if (axios.isAxiosError(error) && error.response) {
-                console.error('Response status:', error.response.status);
-                console.error('Response data:', error.response.data);
                 showAlert('Registration Failed', error.response.data?.message || error.message);
             } else {
                 showAlert('Registration Failed', 'An unexpected error occurred');
@@ -233,8 +229,5 @@ export function useAuth() {
     if (context === undefined) {
         throw new Error('useAuth must be used within an AuthProvider');
     }
-
-    console.log("use auth and authenticated -> " + context.isAuthenticated);
-
     return context;
 }

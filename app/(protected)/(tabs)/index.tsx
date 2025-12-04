@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import React from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -13,7 +14,6 @@ interface WalkStats {
   totalWalks: number;
   totalDistance: number;
   totalDuration: number;
-  thisWeek: number;
 }
 
 export default function Index() {
@@ -23,7 +23,6 @@ export default function Index() {
     totalWalks: 127,
     totalDistance: 254.8,
     totalDuration: 6340,
-    thisWeek: 5,
   };
 
   const formatDuration = (minutes: number): string => {
@@ -65,11 +64,10 @@ export default function Index() {
               </Text>
             </View>
           </View>
-          <Text style={styles.startButtonArrow}>→</Text>
         </TouchableOpacity>
 
         {/* Weekly Progress */}
-        <View style={styles.section}>
+        {/* <View style={styles.section}>
           <Text style={styles.sectionTitle}>This Week</Text>
           <View style={styles.weeklyCard}>
             <View style={styles.weeklyContent}>
@@ -88,7 +86,7 @@ export default function Index() {
               <Text style={styles.weeklyGoal}>Goal: 7 walks/week</Text>
             </View>
           </View>
-        </View>
+        </View> */}
 
         {/* Stats Grid */}
         <View style={styles.section}>
@@ -207,10 +205,10 @@ const styles = StyleSheet.create({
   },
   startButton: {
     backgroundColor: '#660033',
-    marginHorizontal: 20,
+    marginHorizontal: 30,
     marginBottom: 24,
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 25,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -226,7 +224,7 @@ const styles = StyleSheet.create({
   },
   startButtonIcon: {
     fontSize: 32,
-    marginRight: 16,
+    marginRight: 15,
   },
   startButtonText: {
     flex: 1,
@@ -240,11 +238,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#E0E7FF',
     marginTop: 2,
-  },
-  startButtonArrow: {
-    fontSize: 24,
-    color: '#FFF',
-    fontWeight: 'bold',
   },
   section: {
     marginBottom: 24,

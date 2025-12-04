@@ -1,3 +1,4 @@
+import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { router } from "expo-router";
 import React, { useEffect, useRef } from "react";
 import {
@@ -14,25 +15,22 @@ const { width, height } = Dimensions.get("window");
 export default function SplashScreen() {
   const { isAuthenticated, isLoading } = useAuth();
 
-  // Animation values for paw stamps (bottom to top)
+  // Animation values for paw stamps (bottom left to upper right)
   const paw1 = useRef(new Animated.Value(0)).current;
   const paw2 = useRef(new Animated.Value(0)).current;
   const paw3 = useRef(new Animated.Value(0)).current;
-  const paw4 = useRef(new Animated.Value(0)).current;
-  const paw5 = useRef(new Animated.Value(0)).current;
-  const paw6 = useRef(new Animated.Value(0)).current;
 
   // Animation value for title
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const titleScale = useRef(new Animated.Value(0.5)).current;
 
   useEffect(() => {
-    // Start paw stamp animations from bottom to top
+    // Start paw stamp animations from bottom left to upper right
     const pawDuration = 250;
     const pawDelay = 150;
 
     Animated.sequence([
-      // Paw stamps appear one by one from bottom to top
+      // Paw stamps appear one by one diagonally
       Animated.timing(paw1, {
         toValue: 1,
         duration: pawDuration,
@@ -46,24 +44,6 @@ export default function SplashScreen() {
       }),
       Animated.delay(pawDelay),
       Animated.timing(paw3, {
-        toValue: 1,
-        duration: pawDuration,
-        useNativeDriver: true,
-      }),
-      Animated.delay(pawDelay),
-      Animated.timing(paw4, {
-        toValue: 1,
-        duration: pawDuration,
-        useNativeDriver: true,
-      }),
-      Animated.delay(pawDelay),
-      Animated.timing(paw5, {
-        toValue: 1,
-        duration: pawDuration,
-        useNativeDriver: true,
-      }),
-      Animated.delay(pawDelay),
-      Animated.timing(paw6, {
         toValue: 1,
         duration: pawDuration,
         useNativeDriver: true,
@@ -85,7 +65,7 @@ export default function SplashScreen() {
     });
 
     // Navigate after total animation time
-    const totalAnimationTime = (pawDuration + pawDelay) * 6 + 1500;
+    const totalAnimationTime = (pawDuration + pawDelay) * 3 + 1500;
     const navigationTimeout = setTimeout(() => {
       if (!isLoading) {
         if (isAuthenticated) {
@@ -99,14 +79,11 @@ export default function SplashScreen() {
     return () => clearTimeout(navigationTimeout);
   }, [isAuthenticated, isLoading]);
 
-  // Paw prints walking from bottom to top
+  // Paw prints walking diagonally from bottom left to upper right
   const pawPrints = [
-    { anim: paw1, left: width * 0.2, top: height * 0.75, rotation: -15 },
-    { anim: paw2, left: width * 0.6, top: height * 0.65, rotation: 15 },
-    { anim: paw3, left: width * 0.25, top: height * 0.55, rotation: -10 },
-    { anim: paw4, left: width * 0.65, top: height * 0.45, rotation: 10 },
-    { anim: paw5, left: width * 0.3, top: height * 0.35, rotation: -5 },
-    { anim: paw6, left: width * 0.7, top: height * 0.25, rotation: 5 },
+    { anim: paw1, left: width * 0.15, top: height * 0.7, rotation: -15 },
+    { anim: paw2, left: width * 0.45, top: height * 0.5, rotation: 15 },
+    { anim: paw3, left: width * 0.75, top: height * 0.3, rotation: -10 },
   ];
 
   return (
@@ -135,7 +112,7 @@ export default function SplashScreen() {
             },
           ]}
         >
-          <Text style={styles.pawPrint}>🐾</Text>
+          <FontAwesome name="paw" size={60} color="#000000" style={styles.pawPrint} />
         </Animated.View>
       ))}
 
@@ -149,7 +126,6 @@ export default function SplashScreen() {
           },
         ]}
       >
-        <Text style={styles.titleIcon}>🐾</Text>
         <Text style={styles.title}>WalkDog</Text>
         <Text style={styles.subtitle}>Track every adventure with your pup</Text>
       </Animated.View>
@@ -167,7 +143,6 @@ const styles = StyleSheet.create({
     position: "absolute",
   },
   pawPrint: {
-    fontSize: 60,
     opacity: 0.3,
   },
   titleContainer: {
@@ -179,7 +154,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   titleIcon: {
-    fontSize: 80,
     marginBottom: 16,
   },
   title: {

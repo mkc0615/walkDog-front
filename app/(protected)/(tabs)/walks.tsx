@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
@@ -8,6 +9,7 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from "../../auth-context";
 
 interface Walk {
   id: string;
@@ -21,67 +23,46 @@ type FilterType = 'all' | 'week' | 'month';
 
 const MyWalksScreen: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('all');
-  const icons = ['🌳', '🌆', '🏞', '🏖', '🏘', '⛰️', '🌃'];   
+  const [walks, setWalks] = useState<Walk[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const icons = ['🌳', '🌆', '🏞', '🏖', '🏘', '⛰️', '🌃'];
 
-  // TODO: Replace with data from your Spring Boot backend
-  const walks: Walk[] = [
-    {
-      id: '1',
-      title: 'Morning Walk',
-      date: '2025-11-15T08:30:00',
-      distance: 2.3,
-      duration: 32,
-    },
-    {
-      id: '2',
-      title: 'Evening Stroll',
-      date: '2025-11-14T18:45:00',
-      distance: 1.8,
-      duration: 25,
-    },
-    {
-      id: '3',
-      title: 'Park Adventure',
-      date: '2025-11-14T09:15:00',
-      distance: 3.5,
-      duration: 48,
-    },
-    {
-      id: '4',
-      title: 'Quick Run',
-      date: '2025-11-13T07:00:00',
-      distance: 1.2,
-      duration: 15,
-    },
-    {
-      id: '5',
-      title: 'Beach Walk',
-      date: '2025-11-12T17:30:00',
-      distance: 4.2,
-      duration: 62,
-    },
-    {
-      id: '6',
-      title: 'Neighborhood Loop',
-      date: '2025-11-12T08:00:00',
-      distance: 2.0,
-      duration: 28,
-    },
-    {
-      id: '7',
-      title: 'Trail Hike',
-      date: '2025-11-11T10:30:00',
-      distance: 5.6,
-      duration: 85,
-    },
-    {
-      id: '8',
-      title: 'City Walk',
-      date: '2025-11-10T16:00:00',
-      distance: 2.8,
-      duration: 38,
-    },
-  ];
+  // Get token from auth context
+  const { token } = useAuth();
+
+  // Fetch walks from API
+  useEffect(() => {
+    const fetchWalks = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+        const response = await fetch(`${apiUrl}/api/v1/walks`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setWalks(data);
+      } catch (err) {
+        console.error('Error fetching walks:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch walks');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchWalks();
+  }, []);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -238,13 +219,37 @@ const MyWalksScreen: React.FC = () => {
       </View>
 
       {/* Walks List */}
-      <FlatList
-        data={walks}
-        renderItem={renderWalkItem}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-      />
+      {isLoading ? (
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#660033" />
+          <Text style={styles.loadingText}>Loading walks...</Text>
+        </View>
+      ) : error ? (
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => window.location.reload()}
+          >
+            <Text style={styles.retryButtonText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      ) : walks.length === 0 ? (
+        <View style={styles.centerContainer}>
+          <Text style={styles.emptyIcon}>🐾</Text>
+          <Text style={styles.emptyText}>No walks yet</Text>
+          <Text style={styles.emptySubtext}>Start your first walk to see it here!</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={walks}
+          renderItem={renderWalkItem}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -402,6 +407,53 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: '#CCC',
     fontWeight: '300',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#660033',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
 });
 

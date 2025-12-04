@@ -1,6 +1,9 @@
+import * as Location from "expo-location";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -11,6 +14,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../auth-context";
 
 interface Dog {
   id: string;
@@ -18,15 +22,47 @@ interface Dog {
 }
 
 export default function StartWalkScreen() {
-  // TODO: Fetch user's dogs from backend
-  const [dogs] = useState<Dog[]>([
-    { id: "1", name: "Buddy" },
-    { id: "2", name: "Luna" },
-  ]);
-
+  const [dogs, setDogs] = useState<Dog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedDogs, setSelectedDogs] = useState<string[]>([]);
+  const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [isStarting, setIsStarting] = useState(false);
+
+  const { token } = useAuth();
+
+  useEffect(() => {
+    const fetchDogs = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+        const response = await fetch(`${apiUrl}/api/v1/dogs`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setDogs(data);
+      } catch (err) {
+        console.error('Error fetching dogs:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch dogs');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchDogs();
+  }, [token]);
 
   const toggleDogSelection = (dogId: string) => {
     setSelectedDogs((prev) =>
@@ -38,22 +74,80 @@ export default function StartWalkScreen() {
 
   const handleStartWalk = async () => {
     if (selectedDogs.length === 0) {
-      console.log("Please select at least one dog");
+      Alert.alert("No Dogs Selected", "Please select at least one dog to start the walk.");
       return;
     }
 
     setIsStarting(true);
 
-    // TODO: Start GPS tracking and create walk in backend
-    console.log("Starting walk with dogs:", selectedDogs);
-    console.log("Notes:", notes);
+    try {
+      // Get current location
+      const { status } = await Location.getForegroundPermissionsAsync();
 
-    // Simulate API call
-    setTimeout(() => {
+      if (status !== "granted") {
+        Alert.alert(
+          "Location Permission Required",
+          "Please enable location access to start tracking your walk."
+        );
+        setIsStarting(false);
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      // Prepare walk data
+      const walkData = {
+        title: title.trim() || '',
+        dogIds: selectedDogs,
+        description: notes.trim() || '',
+        startLatitude: location.coords.latitude,
+        startLongitude: location.coords.longitude
+      };
+
+      // Send to backend
+      const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+      const response = await fetch(`${apiUrl}/api/v1/walks`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(walkData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+
+      // Verify the walk was started successfully
+      if (result.status === 'STARTED' && result.walkId) {
+
+        // Navigate to active walk tracking screen with walk data
+        router.push({
+          pathname: "/(protected)/activeWalk",
+          params: {
+            walkId: result.walkId,
+            title: title,
+            dogIds: JSON.stringify(selectedDogs),
+            description: notes,
+          },
+        });
+      } else {
+        throw new Error("Invalid response from server");
+      }
+    } catch (err) {
+      console.error('Error starting walk:', err);
+      Alert.alert(
+        "Failed to Start Walk",
+        err instanceof Error ? err.message : "An error occurred while starting the walk. Please try again."
+      );
+    } finally {
       setIsStarting(false);
-      // Navigate to active walk tracking screen
-      router.replace("/(protected)/activeWalk");
-    }, 1000);
+    }
   };
 
   const handleCancel = () => {
@@ -88,33 +182,65 @@ export default function StartWalkScreen() {
               Choose which dog(s) to walk
             </Text>
 
-            <View style={styles.dogsContainer}>
-              {dogs.map((dog) => (
+            {isLoading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#660033" />
+                <Text style={styles.loadingText}>Loading your dogs...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorIcon}>⚠️</Text>
+                <Text style={styles.errorText}>{error}</Text>
                 <TouchableOpacity
-                  key={dog.id}
-                  style={[
-                    styles.dogOption,
-                    selectedDogs.includes(dog.id) && styles.dogOptionSelected,
-                  ]}
-                  onPress={() => toggleDogSelection(dog.id)}
+                  style={styles.retryButton}
+                  onPress={() => window.location.reload()}
                 >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      selectedDogs.includes(dog.id) && styles.checkboxSelected,
-                    ]}
-                  >
-                    {selectedDogs.includes(dog.id) && (
-                      <Text style={styles.checkmark}>✓</Text>
-                    )}
-                  </View>
-                  <View style={styles.dogOptionAvatar}>
-                    <Text style={styles.dogOptionEmoji}>🐕</Text>
-                  </View>
-                  <Text style={styles.dogOptionText}>{dog.name}</Text>
+                  <Text style={styles.retryButtonText}>Retry</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
+              </View>
+            ) : dogs.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyIcon}>🐕</Text>
+                <Text style={styles.emptyText}>No dogs added yet</Text>
+                <Text style={styles.emptySubtext}>
+                  Add a dog to your profile to start tracking walks
+                </Text>
+                <TouchableOpacity
+                  style={styles.addDogButton}
+                  onPress={() => router.push("/(protected)/addDog")}
+                >
+                  <Text style={styles.addDogButtonText}>Add Dog</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={styles.dogsContainer}>
+                {dogs.map((dog) => (
+                  <TouchableOpacity
+                    key={dog.id}
+                    style={[
+                      styles.dogOption,
+                      selectedDogs.includes(dog.id) && styles.dogOptionSelected,
+                    ]}
+                    onPress={() => toggleDogSelection(dog.id)}
+                  >
+                    <View
+                      style={[
+                        styles.checkbox,
+                        selectedDogs.includes(dog.id) && styles.checkboxSelected,
+                      ]}
+                    >
+                      {selectedDogs.includes(dog.id) && (
+                        <Text style={styles.checkmark}>✓</Text>
+                      )}
+                    </View>
+                    <View style={styles.dogOptionAvatar}>
+                      <Text style={styles.dogOptionEmoji}>🐕</Text>
+                    </View>
+                    <Text style={styles.dogOptionText}>{dog.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Location Section */}
@@ -129,6 +255,19 @@ export default function StartWalkScreen() {
                 </Text>
               </View>
             </View>
+          </View>
+
+          {/* Title Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Walk Title (Optional)</Text>
+            <TextInput
+              style={styles.titleInput}
+              placeholder="e.g., Morning Walk, Park Adventure..."
+              placeholderTextColor="#999"
+              value={title}
+              onChangeText={setTitle}
+              maxLength={50}
+            />
           </View>
 
           {/* Notes Section */}
@@ -333,6 +472,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
+  titleInput: {
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 16,
+    color: "#1A1A1A",
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+  },
   notesInput: {
     backgroundColor: "#FFF",
     borderRadius: 12,
@@ -399,5 +547,77 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
     color: "#FFF",
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#666",
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#EF4444",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: "#660033",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  addDogButton: {
+    backgroundColor: "#660033",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  addDogButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 });

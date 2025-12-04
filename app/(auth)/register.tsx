@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { memo, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -118,13 +119,13 @@ export default function RegisterScreen() {
 
     const handleRegister = async (name: string, email: string, password: string, confirmPassword: string) => {
         if(!name || !email || !password || !confirmPassword) {
-          console.log("All fields are required");
-            return;
+          Alert.alert("All fields are required");
+          return;
         }
 
         if(password !== confirmPassword) {
-          console.log("Passwords don't match");
-            return;
+          Alert.alert("Passwords don't match");
+          return;
         }
 
         const success = await registerRef.current(name, email, password);
