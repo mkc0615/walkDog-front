@@ -34,8 +34,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'user_data';
 
-// let AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
-// let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
 let AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
 let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
 let CLIENT_ID = process.env.CLIENT_ID || 'dev';
@@ -81,7 +79,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const storedUser = await storage.getItem(USER_KEY);
 
             if (storedToken && storedUser) {
-                console.log("setting token and user !!!");
                 setToken(storedToken);
                 setUser(JSON.parse(storedUser));
             }
@@ -102,19 +99,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             params.append('password', password);
             params.append('scope', 'user');
             
-            console.log(`${CLIENT_ID}`);
-            console.log(`${CLIENT_PW}`);
             const authHeader = encodeBasicAuth(`${CLIENT_ID}`, `${CLIENT_PW}`);
-            console.log(authHeader);
-
             const response = await axios.post(`${AUTH_SERVICE_URL}/oauth2/token`, params, {
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Authorization': authHeader
                 }
             });
-
-            console.log("check results -> ", response.data);
 
             const accessToken = response.data.access_token || response.data.token;
             if (!accessToken) {
@@ -144,7 +135,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return false;
         } finally {
-            // Only set loading false if not already set (on error path)
             setIsLoading((current) => current ? false : current);
         }
     };
@@ -163,8 +153,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 }
             });
 
-            console.log("Registration results -> ", response.data);
-
             // After successful registration, automatically log in the user
             if (response.status === 200 || response.status === 201) {
                 const loginSuccess = await login(email, password);
@@ -173,7 +161,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
             return true;
         } catch (error) {
-            console.error('Registration error:', error);
             if (axios.isAxiosError(error) && error.response) {
                 showAlert('Registration Failed', error.response.data?.message || error.message);
             } else {
@@ -186,7 +173,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     const logout = async () => {
-        console.log("logout entered !!!");
         try {
             setIsLoading(true);
 

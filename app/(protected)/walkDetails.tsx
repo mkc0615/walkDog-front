@@ -1,6 +1,8 @@
-import { router } from 'expo-router';
-import React from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,36 +10,58 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useAuth } from '../auth-context';
 
 interface WalkDetail {
-  id: string;
+  walkId: number;
   title: string;
-  date: string;
+  description?: string;
   distance: number;
   duration: number;
-  steps: number;
-  calories: number;
-  avgPace: string;
-  notes?: string;
-  weather?: string;
-  temperature?: number;
+  startedAt: string;
+  endedAt?: string;
+  dogIds: number[];
 }
 
 const WalkDetailScreen: React.FC = () => {
-  // TODO: Replace with data from your Spring Boot backend based on route params
-  const walk: WalkDetail = {
-    id: '1',
-    title: 'Morning Walk',
-    date: '2025-11-15T08:30:00',
-    distance: 2.3,
-    duration: 32,
-    steps: 3150,
-    calories: 145,
-    avgPace: '13:54',
-    notes: 'Beautiful morning! My dog loved the park today. Met some friendly dogs along the way.',
-    weather: 'Sunny',
-    temperature: 22,
-  };
+  const params = useLocalSearchParams<{ walkId: string }>();
+  const { token } = useAuth();
+  const [walk, setWalk] = useState<WalkDetail | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchWalkDetails = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+        const response = await fetch(`${apiUrl}/api/v1/walks/${params.walkId}`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        setWalk(data);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch walk details');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (params.walkId) {
+      fetchWalkDetails();
+    }
+  }, [params.walkId, token]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -64,14 +88,83 @@ const WalkDetailScreen: React.FC = () => {
   };
 
   const handleDelete = () => {
-    // TODO: Show confirmation dialog and delete
-    console.log('Delete walk');
+    Alert.alert(
+      "Delete Walk",
+      "Are you sure you want to delete this walk? This action cannot be undone.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+              const response = await fetch(`${apiUrl}/api/v1/walks/${params.walkId}`, {
+                method: 'DELETE',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+              });
+
+              if (response.ok) {
+                // Success - navigate to walks list
+                router.replace("/(protected)/(tabs)/walks");
+              } else {
+                // Failed - show error message
+                Alert.alert(
+                  "Deletion Failed",
+                  "Failed to delete the walk. Please try again."
+                );
+              }
+            } catch (error) {
+              console.error('Error deleting walk:', error);
+              Alert.alert(
+                "Deletion Failed",
+                "An error occurred while deleting the walk. Please try again."
+              );
+            }
+          }
+        }
+      ]
+    );
   };
 
-  const handleShare = () => {
-    // TODO: Share walk details
-    console.log('Share walk');
-  };
+  if (isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#660033" />
+          <Text style={styles.loadingText}>Loading walk details...</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !walk) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.centerContainer}>
+          <Text style={styles.errorIcon}>⚠️</Text>
+          <Text style={styles.errorText}>{error || 'Walk not found'}</Text>
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.retryButtonText}>Go Back</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -96,68 +189,59 @@ const WalkDetailScreen: React.FC = () => {
             </Text>
           </View>
           <View style={styles.walkIconOverlay}>
-            <Text style={styles.walkEmojiLarge}>{walk.icon}</Text>
+            <Text style={styles.walkEmojiLarge}>🐕</Text>
           </View>
         </View>
 
         {/* Walk Title and Time */}
         <View style={styles.titleSection}>
-          <Text style={styles.walkTitle}>{walk.title}</Text>
-          <Text style={styles.walkDate}>{formatDate(walk.date)}</Text>
-          <Text style={styles.walkTime}>{formatTime(walk.date)}</Text>
+          <Text style={styles.walkTitle}>{walk.title || 'Walk Details'}</Text>
+          <Text style={styles.walkDate}>{formatDate(walk.startedAt)}</Text>
+          <Text style={styles.walkTime}>{formatTime(walk.startedAt)}</Text>
+          {walk.dogIds && walk.dogIds.length > 0 && (
+            <Text style={styles.walkSubtext}>
+              Walking with {walk.dogIds.length} dog{walk.dogIds.length > 1 ? 's' : ''}
+            </Text>
+          )}
         </View>
 
         {/* Main Stats */}
         <View style={styles.mainStats}>
           <View style={styles.mainStatCard}>
             <Text style={styles.mainStatIcon}>📍</Text>
-            <Text style={styles.mainStatValue}>{walk.distance}</Text>
+            <Text style={styles.mainStatValue}>{walk.distance.toFixed(2)}</Text>
             <Text style={styles.mainStatUnit}>kilometers</Text>
           </View>
           <View style={styles.mainStatCard}>
             <Text style={styles.mainStatIcon}>⏱️</Text>
-            <Text style={styles.mainStatValue}>{walk.duration}</Text>
+            <Text style={styles.mainStatValue}>{Math.floor(walk.duration / 60)}</Text>
             <Text style={styles.mainStatUnit}>minutes</Text>
           </View>
         </View>
 
-        {/* Additional Stats Grid */}
+        {/* Additional Stats */}
         <View style={styles.statsGrid}>
-          <View style={styles.statItem}>
-            <View style={styles.statIconContainer}>
-              <Text style={styles.statIcon}>👣</Text>
-            </View>
-            <Text style={styles.statValue}>{walk.steps.toLocaleString()}</Text>
-            <Text style={styles.statLabel}>Steps</Text>
-          </View>
-
-          <View style={styles.statItem}>
-            <View style={styles.statIconContainer}>
-              <Text style={styles.statIcon}>🔥</Text>
-            </View>
-            <Text style={styles.statValue}>{walk.calories}</Text>
-            <Text style={styles.statLabel}>Calories</Text>
-          </View>
-
           <View style={styles.statItem}>
             <View style={styles.statIconContainer}>
               <Text style={styles.statIcon}>⚡</Text>
             </View>
-            <Text style={styles.statValue}>{walk.avgPace}</Text>
-            <Text style={styles.statLabel}>Avg Pace</Text>
+            <Text style={styles.statValue}>
+              {walk.duration > 0 ? ((walk.distance / (walk.duration / 3600)).toFixed(1)) : '0.0'}
+            </Text>
+            <Text style={styles.statLabel}>km/h</Text>
           </View>
 
           <View style={styles.statItem}>
             <View style={styles.statIconContainer}>
-              <Text style={styles.statIcon}>☀️</Text>
+              <Text style={styles.statIcon}>🐕</Text>
             </View>
-            <Text style={styles.statValue}>{walk.temperature}°</Text>
-            <Text style={styles.statLabel}>{walk.weather}</Text>
+            <Text style={styles.statValue}>{walk.dogIds.length}</Text>
+            <Text style={styles.statLabel}>Dog{walk.dogIds.length > 1 ? 's' : ''}</Text>
           </View>
         </View>
 
         {/* Notes Section */}
-        {walk.notes && (
+        {walk.description && (
           <View style={styles.notesSection}>
             <View style={styles.notesSectionHeader}>
               <Text style={styles.sectionTitle}>Notes</Text>
@@ -166,18 +250,13 @@ const WalkDetailScreen: React.FC = () => {
               </TouchableOpacity>
             </View>
             <View style={styles.notesCard}>
-              <Text style={styles.notesText}>{walk.notes}</Text>
+              <Text style={styles.notesText}>{walk.description}</Text>
             </View>
           </View>
         )}
 
         {/* Action Buttons */}
         <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-            <Text style={styles.shareButtonIcon}>📤</Text>
-            <Text style={styles.shareButtonText}>Share Walk</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity style={styles.editButtonLarge} onPress={handleEdit}>
             <Text style={styles.editButtonIcon}>✏️</Text>
             <Text style={styles.editButtonText}>Edit Details</Text>
@@ -307,6 +386,43 @@ const styles = StyleSheet.create({
   walkTime: {
     fontSize: 16,
     color: '#666',
+  },
+  walkSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666',
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#EF4444',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: '#660033',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   mainStats: {
     flexDirection: 'row',
