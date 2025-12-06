@@ -1,50 +1,157 @@
-# Welcome to your Expo app 👋
+# WalkDog 🐕
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native mobile application for tracking dog walks with GPS, built with Expo and TypeScript.
 
-## Get started
+## Prerequisites
 
-1. Install dependencies
+Before you begin, ensure you have the following installed:
+
+- **Node.js** (v16 or higher)
+- **npm** or **yarn**
+- **Expo CLI** (install globally: `npm install -g expo-cli`)
+- **iOS Simulator** (for macOS) or **Android Emulator**
+- **Expo Go** app on your physical device (optional)
+
+## Backend Requirements
+
+This app requires a backend API server running. The backend should provide:
+
+- currently you can clone the following repo: https://github.com/mkc0615/walkDog
+
+## Installation
+
+1. **Clone the repository**
+
+   ```bash
+   git clone <repository-url>
+   cd walk-dog-front
+   ```
+
+2. **Install dependencies**
 
    ```bash
    npm install
    ```
 
-2. Start the app
+3. **Set up environment variables**
+   Create a `.env` file in the root directory with the following variables:
+
+   ```env
+   EXPO_PUBLIC_API_SERVICE_URL=your_backend_api_url_here
+   EXPO_PUBLIC_MAP_TILER_KEY=your_maptiler_api_key_here
+   ```
+
+   **Getting a MapTiler API Key:**
+
+   - Sign up for a free account at [MapTiler](https://www.maptiler.com/)
+   - Navigate to Account → Keys
+   - Create a new key and copy it to your `.env` file
+
+4. **Configure app.json** (if needed)
+   The app is already configured with location permissions. If you need to modify:
+   - iOS: Edit `ios.infoPlist` in `app.json`
+   - Android: Edit `android.permissions` in `app.json`
+
+## Running the App
+
+1. **Start the development server**
 
    ```bash
    npx expo start
    ```
 
-In the output, you'll find options to open the app in a
+2. **Run on your device**
+   After starting the server, you can:
+   - **iOS Simulator**: Press `i` in the terminal
+   - **Android Emulator**: Press `a` in the terminal
+   - **Physical Device**: Scan the QR code with Expo Go app
+   - **Web**: Press `w` (limited functionality - no maps/GPS)
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+## Project Structure
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+app/
+├── (auth)/              # Authentication screens
+│   ├── login.tsx        # Login screen
+│   └── register.tsx     # Registration screen
+├── (protected)/         # Protected (authenticated) routes
+│   ├── (tabs)/         # Tab navigation screens
+│   │   ├── index.tsx   # Home/Dashboard
+│   │   ├── walks.tsx   # Walk history list
+│   │   └── profile.tsx # User profile
+│   ├── startWalk.tsx   # Walk setup screen
+│   ├── activeWalk.tsx  # Active walk tracking with GPS
+│   ├── walkDetails.tsx # Individual walk details
+│   └── addDog.tsx      # Add new dog
+├── auth-context.tsx    # Authentication context provider
+├── splash.tsx          # Splash screen with animation
+└── _layout.tsx         # Root layout with providers
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Key Technologies
 
-## Learn more
+- **React Native** - Mobile framework
+- **Expo** - Development platform and toolchain
+- **TypeScript** - Type-safe JavaScript
+- **Expo Router** - File-based routing system
+- **expo-location** - GPS tracking and location services
+- **react-native-maps** - Map visualization
+- **MapTiler** - Map tiles and styling
+- **JWT** - Token-based authentication
 
-To learn more about developing your project with Expo, look at the following resources:
+## Location Permissions
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+The app requests location permissions during login. Required permissions:
 
-## Join the community
+- **iOS**: `NSLocationWhenInUseUsageDescription`, `NSLocationAlwaysAndWhenInUseUsageDescription`
+- **Android**: `ACCESS_COARSE_LOCATION`, `ACCESS_FINE_LOCATION`
 
-Join our community of developers creating universal apps.
+## Environment Variables
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+| Variable                      | Description               | Required |
+| ----------------------------- | ------------------------- | -------- |
+| `EXPO_PUBLIC_API_SERVICE_URL` | Backend API base URL      | Yes      |
+| `EXPO_PUBLIC_MAP_TILER_KEY`   | MapTiler API key for maps | Yes      |
+
+## Troubleshooting
+
+**Maps not loading:**
+
+- Verify your MapTiler API key is correct
+- Check internet connection
+- Ensure the key is prefixed with `EXPO_PUBLIC_`
+
+**Location not working:**
+
+- Check location permissions in device settings
+- Ensure GPS is enabled on the device
+- Verify `expo-location` is properly installed
+
+**Backend connection failed:**
+
+- Verify backend server is running
+- Check `EXPO_PUBLIC_API_SERVICE_URL` in `.env`
+- For localhost on Android emulator, use `http://10.0.2.2:9010`
+- For localhost on iOS simulator, use `http://localhost:9010`
+
+**Authentication issues:**
+
+- Clear app data and reinstall
+- Check token expiration on backend
+- Verify JWT token format
+
+## Build for Production
+
+**iOS:**
+
+```bash
+eas build --platform ios
+```
+
+**Android:**
+
+```bash
+eas build --platform android
+```
+
+_Note: Requires [Expo Application Services (EAS)](https://expo.dev/eas) account_
