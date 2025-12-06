@@ -1,5 +1,5 @@
-import { router } from "expo-router";
 import * as Location from "expo-location";
+import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Alert,
@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import MapView, { Polyline, UrlTile } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useAuth } from "../auth-context";
 
 interface Coordinate {
   latitude: number;
@@ -23,12 +24,21 @@ export default function ActiveWalkScreen() {
   const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>([]);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
+  const { token } = useAuth();
+  const params = useLocalSearchParams<{
+    walkId: string;
+    dogIds: string;
+  }>();
 
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
 
-  // TODO: Get walk data from route params or context
-  const walkingDogs = ["Buddy", "Luna"];
+  // Parse dog IDs from route params
+  const walkingDogs = params.dogIds ? JSON.parse(params.dogIds) : [];
+
+  // Debug: Log the dog IDs
+  console.log('Route params.dogIds:', params.dogIds);
+  console.log('Parsed walkingDogs:', walkingDogs);
 
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = (coord1: Coordinate, coord2: Coordinate): number => {
@@ -147,15 +157,83 @@ export default function ActiveWalkScreen() {
     setIsPaused(!isPaused);
   };
 
-  const handleEndWalk = () => {
-    // TODO: Show confirmation dialog
-    // TODO: Save walk data to backend
-    console.log("Ending walk");
-    console.log("Duration:", duration, "seconds");
-    console.log("Distance:", distance.toFixed(2), "km");
+  const handleEndWalk = async () => {
+    Alert.alert(
+      "End Walk",
+      "Are you sure you want to end this walk?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "End Walk",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              // Stop location tracking
+              if (locationSubscription.current) {
+                locationSubscription.current.remove();
+                locationSubscription.current = null;
+              }
 
-    // Navigate to My Walk tab
-    router.replace("/(protected)/(tabs)/walks");
+              // Prepare walk result data
+              const walkResultData = {
+                dogIds: walkingDogs,
+                duration: duration,
+                distance: parseFloat(distance.toFixed(2))
+              };
+
+              // Debug: Log what we're sending
+              console.log('Sending to backend:', walkResultData);
+
+              // Send to backend
+              const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+              const response = await fetch(`${apiUrl}/api/v1/walks/${params.walkId}/stop`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${token}`,
+                },
+                body: JSON.stringify(walkResultData)
+              });
+
+              if (response.ok) {
+                // Success - show success message
+                Alert.alert(
+                  "Success",
+                  "Your walk is saved",
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => router.replace("/(protected)/(tabs)/walks")
+                    }
+                  ]
+                );
+              } else {
+                // Failed - show error message
+                Alert.alert(
+                  "Error",
+                  "Walk save failed!",
+                  [
+                    {
+                      text: "OK",
+                      onPress: () => router.replace("/(protected)/(tabs)/walks")
+                    }
+                  ]
+                );
+              }
+            } catch (error) {
+              console.error('Error ending walk:', error);
+              Alert.alert(
+                "Failed to End Walk",
+                error instanceof Error ? error.message : "An error occurred while ending the walk. Please try again."
+              );
+            }
+          }
+        }
+      ]
+    );
   };
 
   return (

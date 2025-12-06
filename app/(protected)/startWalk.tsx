@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../auth-context";
 
 interface Dog {
-  id: string;
+  dogId: number;
   name: string;
 }
 
@@ -25,7 +25,7 @@ export default function StartWalkScreen() {
   const [dogs, setDogs] = useState<Dog[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedDogs, setSelectedDogs] = useState<string[]>([]);
+  const [selectedDogs, setSelectedDogs] = useState<number[]>([]);
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [isStarting, setIsStarting] = useState(false);
@@ -52,6 +52,8 @@ export default function StartWalkScreen() {
         }
 
         const data = await response.json();
+        console.log('Fetched dogs from backend:', data);
+        console.log('First dog:', data[0]);
         setDogs(data);
       } catch (err) {
         console.error('Error fetching dogs:', err);
@@ -64,7 +66,8 @@ export default function StartWalkScreen() {
     fetchDogs();
   }, [token]);
 
-  const toggleDogSelection = (dogId: string) => {
+  const toggleDogSelection = (dogId: number) => {
+    console.log('Toggling dog with ID:', dogId, 'Type:', typeof dogId);
     setSelectedDogs((prev) =>
       prev.includes(dogId)
         ? prev.filter((id) => id !== dogId)
@@ -126,14 +129,16 @@ export default function StartWalkScreen() {
       // Verify the walk was started successfully
       if (result.status === 'STARTED' && result.walkId) {
 
-        // Navigate to active walk tracking screen with walk data
+        // Debug: Log the selected dogs before navigation
+        console.log('Selected dogs before navigation:', selectedDogs);
+        console.log('Stringified dogIds:', JSON.stringify(selectedDogs));
+
+        // Navigate to active walk tracking screen with walk ID and selected dogs
         router.push({
           pathname: "/(protected)/activeWalk",
           params: {
             walkId: result.walkId,
-            title: title,
             dogIds: JSON.stringify(selectedDogs),
-            description: notes,
           },
         });
       } else {
@@ -216,20 +221,20 @@ export default function StartWalkScreen() {
               <View style={styles.dogsContainer}>
                 {dogs.map((dog) => (
                   <TouchableOpacity
-                    key={dog.id}
+                    key={dog.dogId}
                     style={[
                       styles.dogOption,
-                      selectedDogs.includes(dog.id) && styles.dogOptionSelected,
+                      selectedDogs.includes(dog.dogId) && styles.dogOptionSelected,
                     ]}
-                    onPress={() => toggleDogSelection(dog.id)}
+                    onPress={() => toggleDogSelection(dog.dogId)}
                   >
                     <View
                       style={[
                         styles.checkbox,
-                        selectedDogs.includes(dog.id) && styles.checkboxSelected,
+                        selectedDogs.includes(dog.dogId) && styles.checkboxSelected,
                       ]}
                     >
-                      {selectedDogs.includes(dog.id) && (
+                      {selectedDogs.includes(dog.dogId) && (
                         <Text style={styles.checkmark}>✓</Text>
                       )}
                     </View>
