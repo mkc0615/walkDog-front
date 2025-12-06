@@ -111,10 +111,8 @@ const WalkDetailScreen: React.FC = () => {
               });
 
               if (response.ok) {
-                // Success - navigate to walks list
                 router.replace("/(protected)/(tabs)/walks");
               } else {
-                // Failed - show error message
                 Alert.alert(
                   "Deletion Failed",
                   "Failed to delete the walk. Please try again."

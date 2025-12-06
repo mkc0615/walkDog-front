@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import React from 'react';
+import React, { useState } from 'react';
 import {
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,6 +19,7 @@ interface WalkStats {
 
 export default function Index() {
   const { logout } = useAuth();
+  const [showMenu, setShowMenu] = useState(false);
 
   const stats: WalkStats = {
     totalWalks: 127,
@@ -34,13 +36,49 @@ export default function Index() {
     router.push("/(protected)/startWalk");
   };
 
+  const handleProfile = () => {
+    setShowMenu(false);
+    router.push("/(protected)/profile");
+  };
+
   const handleLogout = async () => {
+    setShowMenu(false);
     await logout();
     router.replace("/(auth)/login");
   };
 
+  const toggleMenu = () => {
+    setShowMenu(!showMenu);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
+        {/* Profile Menu Modal */}
+        <Modal
+          visible={showMenu}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setShowMenu(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setShowMenu(false)}
+          >
+            <View style={styles.menuContainer}>
+              <TouchableOpacity style={styles.menuItem} onPress={handleProfile}>
+                <Text style={styles.menuIcon}>👤</Text>
+                <Text style={styles.menuText}>Profile</Text>
+              </TouchableOpacity>
+              <View style={styles.menuDivider} />
+              <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+                <Text style={styles.menuIcon}>🚪</Text>
+                <Text style={styles.menuText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View style={styles.header}>
@@ -48,7 +86,7 @@ export default function Index() {
             <Text style={styles.greeting}>Hello!</Text>
             <Text style={styles.subGreeting}>Ready for a walk?</Text>
           </View>
-          <TouchableOpacity style={styles.profileButton} onPress={handleLogout}>
+          <TouchableOpacity style={styles.profileButton} onPress={toggleMenu}>
             <Text style={styles.profileIcon}>🐕</Text>
           </TouchableOpacity>
         </View>
@@ -377,5 +415,42 @@ const styles = StyleSheet.create({
   recentWalkTime: {
     fontSize: 12,
     color: '#999',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 60,
+    paddingRight: 20,
+  },
+  menuContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    minWidth: 180,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  menuIcon: {
+    fontSize: 20,
+  },
+  menuText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1A1A1A',
+  },
+  menuDivider: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    marginHorizontal: 12,
   },
 })

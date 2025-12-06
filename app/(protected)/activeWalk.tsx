@@ -17,12 +17,18 @@ interface Coordinate {
   longitude: number;
 }
 
+interface CoordinateWithTimestamp extends Coordinate {
+  timestamp: number;
+  accuracy?: number;
+}
+
 export default function ActiveWalkScreen() {
   const [isPaused, setIsPaused] = useState(false);
   const [duration, setDuration] = useState(0); // in seconds
   const [distance, setDistance] = useState(0); // in km
   const [currentLocation, setCurrentLocation] = useState<Coordinate | null>(null);
   const [routeCoordinates, setRouteCoordinates] = useState<Coordinate[]>([]);
+  const [coordinateBatch, setCoordinateBatch] = useState<CoordinateWithTimestamp[]>([]);
   const [hasLocationPermission, setHasLocationPermission] = useState(false);
   const { token } = useAuth();
   const params = useLocalSearchParams<{
@@ -32,6 +38,7 @@ export default function ActiveWalkScreen() {
 
   const mapRef = useRef<MapView>(null);
   const locationSubscription = useRef<Location.LocationSubscription | null>(null);
+  const batchIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Parse dog IDs from route params
   const walkingDogs = params.dogIds ? JSON.parse(params.dogIds) : [];
@@ -39,6 +46,40 @@ export default function ActiveWalkScreen() {
   // Debug: Log the dog IDs
   console.log('Route params.dogIds:', params.dogIds);
   console.log('Parsed walkingDogs:', walkingDogs);
+
+  // Send coordinate batch to backend
+  const sendCoordinateBatch = async () => {
+    if (coordinateBatch.length === 0) {
+      console.log('No coordinates to send');
+      return;
+    }
+
+    try {
+      const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+      const response = await fetch(`${apiUrl}/api/v1/walks/${params.walkId}/track`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          coordinates: coordinateBatch
+        })
+      });
+
+      if (response.ok) {
+        console.log(`Sent ${coordinateBatch.length} coordinates to backend`);
+        // Clear the batch after successful send
+        setCoordinateBatch([]);
+      } else {
+        console.error('Failed to send coordinates:', response.status);
+        // Keep coordinates in batch to retry later
+      }
+    } catch (error) {
+      console.error('Error sending coordinates:', error);
+      // Keep coordinates in batch to retry later
+    }
+  };
 
   // Calculate distance between two coordinates using Haversine formula
   const calculateDistance = (coord1: Coordinate, coord2: Coordinate): number => {
@@ -107,6 +148,7 @@ export default function ActiveWalkScreen() {
             setCurrentLocation(newCoord);
 
             if (!isPaused) {
+              // Add to route coordinates for map display
               setRouteCoordinates((prev) => {
                 const lastCoord = prev[prev.length - 1];
                 if (lastCoord) {
@@ -115,16 +157,33 @@ export default function ActiveWalkScreen() {
                 }
                 return [...prev, newCoord];
               });
+
+              // Add to batch with timestamp and accuracy for backend
+              const coordWithTimestamp: CoordinateWithTimestamp = {
+                latitude: newLocation.coords.latitude,
+                longitude: newLocation.coords.longitude,
+                timestamp: newLocation.timestamp,
+                accuracy: newLocation.coords.accuracy || undefined,
+              };
+              setCoordinateBatch((prev) => [...prev, coordWithTimestamp]);
             }
           }
         );
       }
     })();
 
+    // Set up 5-minute interval to send coordinate batches
+    batchIntervalRef.current = setInterval(() => {
+      sendCoordinateBatch();
+    }, 5 * 60 * 1000); // 5 minutes in milliseconds
+
     return () => {
       isMounted = false;
       if (locationSubscription.current) {
         locationSubscription.current.remove();
+      }
+      if (batchIntervalRef.current) {
+        clearInterval(batchIntervalRef.current);
       }
     };
   }, []);
@@ -153,7 +212,11 @@ export default function ActiveWalkScreen() {
     return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
-  const handlePauseResume = () => {
+  const handlePauseResume = async () => {
+    if (!isPaused) {
+      // About to pause - send any unsent coordinates
+      await sendCoordinateBatch();
+    }
     setIsPaused(!isPaused);
   };
 
@@ -176,6 +239,15 @@ export default function ActiveWalkScreen() {
                 locationSubscription.current.remove();
                 locationSubscription.current = null;
               }
+
+              // Stop the batch interval
+              if (batchIntervalRef.current) {
+                clearInterval(batchIntervalRef.current);
+                batchIntervalRef.current = null;
+              }
+
+              // Send any remaining coordinates before ending
+              await sendCoordinateBatch();
 
               // Prepare walk result data
               const walkResultData = {
