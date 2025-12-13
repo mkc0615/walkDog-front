@@ -18,7 +18,7 @@ interface WalkStats {
 }
 
 export default function Index() {
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [showMenu, setShowMenu] = useState(false);
 
   const stats: WalkStats = {
@@ -83,7 +83,7 @@ export default function Index() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Hello!</Text>
+            <Text style={styles.greeting}>Hello{user?.name ? `, ${user.name}` : ''}!</Text>
             <Text style={styles.subGreeting}>Ready for a walk?</Text>
           </View>
           <TouchableOpacity style={styles.profileButton} onPress={toggleMenu}>
@@ -157,42 +157,6 @@ export default function Index() {
               </Text>
               <Text style={styles.statLabel}>Avg Distance</Text>
             </View>
-          </View>
-        </View>
-
-        {/* Recent Activity */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Walks</Text>
-            <TouchableOpacity>
-              <Text style={styles.seeAll}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.recentWalk}>
-            <View style={styles.recentWalkLeft}>
-              <View style={styles.recentWalkIcon}>
-                <Text style={styles.recentWalkEmoji}>🌳</Text>
-              </View>
-              <View>
-                <Text style={styles.recentWalkTitle}>Morning Walk</Text>
-                <Text style={styles.recentWalkDetails}>2.3 km • 32 min</Text>
-              </View>
-            </View>
-            <Text style={styles.recentWalkTime}>Today, 8:30 AM</Text>
-          </View>
-
-          <View style={styles.recentWalk}>
-            <View style={styles.recentWalkLeft}>
-              <View style={styles.recentWalkIcon}>
-                <Text style={styles.recentWalkEmoji}>🌳</Text>
-              </View>
-              <View>
-                <Text style={styles.recentWalkTitle}>Evening Stroll</Text>
-                <Text style={styles.recentWalkDetails}>1.8 km • 25 min</Text>
-              </View>
-            </View>
-            <Text style={styles.recentWalkTime}>Yesterday, 6:45 PM</Text>
           </View>
         </View>
       </ScrollView>

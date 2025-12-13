@@ -43,10 +43,6 @@ export default function ActiveWalkScreen() {
   // Parse dog IDs from route params
   const walkingDogs = params.dogIds ? JSON.parse(params.dogIds) : [];
 
-  // Debug: Log the dog IDs
-  console.log('Route params.dogIds:', params.dogIds);
-  console.log('Parsed walkingDogs:', walkingDogs);
-
   // Send coordinate batch to backend
   const sendCoordinateBatch = async () => {
     if (coordinateBatch.length === 0) {

@@ -166,58 +166,6 @@ const MyWalksScreen: React.FC = () => {
         </View>
       </View>
 
-      {/* Filter Buttons */}
-      <View style={styles.filterContainer}>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedFilter === 'all' && styles.filterButtonActive,
-          ]}
-          onPress={() => setSelectedFilter('all')}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              selectedFilter === 'all' && styles.filterTextActive,
-            ]}
-          >
-            All Time
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedFilter === 'week' && styles.filterButtonActive,
-          ]}
-          onPress={() => setSelectedFilter('week')}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              selectedFilter === 'week' && styles.filterTextActive,
-            ]}
-          >
-            This Week
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[
-            styles.filterButton,
-            selectedFilter === 'month' && styles.filterButtonActive,
-          ]}
-          onPress={() => setSelectedFilter('month')}
-        >
-          <Text
-            style={[
-              styles.filterText,
-              selectedFilter === 'month' && styles.filterTextActive,
-            ]}
-          >
-            This Month
-          </Text>
-        </TouchableOpacity>
-      </View>
-
       {/* Walks List */}
       {isLoading ? (
         <View style={styles.centerContainer}>

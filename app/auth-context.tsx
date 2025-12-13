@@ -15,8 +15,11 @@ const showAlert = (title: string, message?: string) => {
 };
 
 type User = {
+    userId?: number;
+    username: string;
     email: string;
-    name: string;
+    phone?: string;
+    createdAt?: string;
 }
 
 type AuthContextType = {
@@ -89,13 +92,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const login = async (email: string, password: string): Promise<boolean> => {
+    const fetchUserProfile = async (accessToken: string): Promise<User | null> => {
+        try {
+            const response = await axios.get(`${API_SERVICE_URL}/api/v1/users/me`, {
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${accessToken}`,
+                }
+            });
+
+            if (response.status === 200 && response.data) {
+                return response.data as User;
+            }
+            return null;
+        } catch (error) {
+            console.error('Error fetching user profile:', error);
+            return null;
+        }
+    };
+
+    const login = async (username: string, password: string): Promise<boolean> => {
         try {
             setIsLoading(true);
 
             const params = new URLSearchParams();
             params.append('grant_type', 'password');
-            params.append('username', email);
+            params.append('username', username);
             params.append('password', password);
             params.append('scope', 'user');
             
@@ -111,18 +133,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!accessToken) {
                 throw new Error('No access token in response');
             }
-            // Store token and user data
+
+            // Store token
             await storage.setItem(TOKEN_KEY, accessToken);
 
-            const userData: User = {
-                email: email,
-                name: email.split('@')[0]
+            // Fetch user profile details
+            const userProfile = await fetchUserProfile(accessToken);
+            if (!userProfile) {
+                throw new Error('Failed to fetch user profile');
             }
-            await storage.setItem(USER_KEY, JSON.stringify(userData));
+
+            // Store user data
+            await storage.setItem(USER_KEY, JSON.stringify(userProfile));
 
             // Batch state updates to reduce re-renders
             setToken(accessToken);
-            setUser(userData);
+            setUser(userProfile);
             setIsLoading(false);
 
             return true;
@@ -139,12 +165,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const register = async (name: string, email: string, password: string): Promise<boolean> => {
+    const register = async (username: string, email: string, password: string): Promise<boolean> => {
         try {
             setIsLoading(true);
 
             const response = await axios.post(`${API_SERVICE_URL}/api/v1/users/register`, {
-                name,
+                username,
                 email,
                 password
             }, {

@@ -3,9 +3,12 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
@@ -29,6 +32,10 @@ const WalkDetailScreen: React.FC = () => {
   const [walk, setWalk] = useState<WalkDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedDescription, setEditedDescription] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     const fetchWalkDetails = async () => {
@@ -51,6 +58,8 @@ const WalkDetailScreen: React.FC = () => {
 
         const data = await response.json();
         setWalk(data);
+        setEditedTitle(data.title || '');
+        setEditedDescription(data.description || '');
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to fetch walk details');
       } finally {
@@ -83,8 +92,51 @@ const WalkDetailScreen: React.FC = () => {
   };
 
   const handleEdit = () => {
-    // TODO: Navigate to edit screen
-    console.log('Edit walk');
+    setIsEditMode(true);
+  };
+
+  const handleCancel = () => {
+    setEditedTitle(walk?.title || '');
+    setEditedDescription(walk?.description || '');
+    setIsEditMode(false);
+  };
+
+  const handleSave = async () => {
+    if (!walk) return;
+
+    try {
+      setIsSaving(true);
+      const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+      const response = await fetch(`${apiUrl}/api/v1/walks/${params.walkId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: editedTitle.trim(),
+          description: editedDescription.trim(),
+        })
+      });
+
+      if (response.ok) {
+        // Update local state with new values
+        setWalk({
+          ...walk,
+          title: editedTitle.trim(),
+          description: editedDescription.trim(),
+        });
+        setIsEditMode(false);
+        Alert.alert('Success', 'Walk details updated successfully');
+      } else {
+        Alert.alert('Error', 'Failed to update walk details');
+      }
+    } catch (error) {
+      console.error('Error updating walk:', error);
+      Alert.alert('Error', 'An error occurred while updating walk details');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleDelete = () => {
@@ -166,6 +218,10 @@ const WalkDetailScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={styles.keyboardView}
+      >
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Header with Back Button */}
         <View style={styles.header}>
@@ -193,7 +249,21 @@ const WalkDetailScreen: React.FC = () => {
 
         {/* Walk Title and Time */}
         <View style={styles.titleSection}>
-          <Text style={styles.walkTitle}>{walk.title || 'Walk Details'}</Text>
+          {isEditMode ? (
+            <>
+              <Text style={styles.fieldLabel}>Walk Title</Text>
+              <TextInput
+                style={styles.titleInput}
+                value={editedTitle}
+                onChangeText={setEditedTitle}
+                placeholder="Enter walk title"
+                placeholderTextColor="#999"
+                maxLength={100}
+              />
+            </>
+          ) : (
+            <Text style={styles.walkTitle}>{walk.title || 'Walk Details'}</Text>
+          )}
           <Text style={styles.walkDate}>{formatDate(walk.startedAt)}</Text>
           <Text style={styles.walkTime}>{formatTime(walk.startedAt)}</Text>
           {walk.dogIds && walk.dogIds.length > 0 && (
@@ -239,35 +309,69 @@ const WalkDetailScreen: React.FC = () => {
         </View>
 
         {/* Notes Section */}
-        {walk.description && (
+        {(isEditMode || walk.description) && (
           <View style={styles.notesSection}>
             <View style={styles.notesSectionHeader}>
               <Text style={styles.sectionTitle}>Notes</Text>
-              <TouchableOpacity onPress={handleEdit}>
-                <Text style={styles.editButton}>Edit</Text>
-              </TouchableOpacity>
             </View>
-            <View style={styles.notesCard}>
-              <Text style={styles.notesText}>{walk.description}</Text>
-            </View>
+            {isEditMode ? (
+              <TextInput
+                style={styles.notesInput}
+                value={editedDescription}
+                onChangeText={setEditedDescription}
+                placeholder="Add notes about this walk..."
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            ) : (
+              <View style={styles.notesCard}>
+                <Text style={styles.notesText}>{walk.description}</Text>
+              </View>
+            )}
           </View>
         )}
 
         {/* Action Buttons */}
-        <View style={styles.actionButtons}>
-          <TouchableOpacity style={styles.editButtonLarge} onPress={handleEdit}>
-            <Text style={styles.editButtonIcon}>✏️</Text>
-            <Text style={styles.editButtonText}>Edit Details</Text>
-          </TouchableOpacity>
-        </View>
+        {isEditMode ? (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={handleCancel}
+              disabled={isSaving}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.saveButton, isSaving && styles.saveButtonDisabled]}
+              onPress={handleSave}
+              disabled={isSaving}
+            >
+              <Text style={styles.saveButtonText}>
+                {isSaving ? 'Saving...' : 'Save Changes'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <>
+            <View style={styles.actionButtons}>
+              <TouchableOpacity style={styles.editButtonLarge} onPress={handleEdit}>
+                <Text style={styles.editButtonIcon}>✏️</Text>
+                <Text style={styles.editButtonText}>Edit Details</Text>
+              </TouchableOpacity>
+            </View>
 
-        {/* Delete Button */}
-        <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
-          <Text style={styles.deleteButtonText}>Delete Walk</Text>
-        </TouchableOpacity>
+            {/* Delete Button */}
+            <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
+              <Text style={styles.deleteButtonText}>Delete Walk</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
         <View style={styles.bottomSpacer} />
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 };
@@ -276,6 +380,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#EDE8D0',
+  },
+  keyboardView: {
+    flex: 1,
   },
   content: {
     flex: 1,
@@ -590,6 +697,63 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 32,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    marginBottom: 8,
+  },
+  titleInput: {
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1A1A1A',
+    borderWidth: 2,
+    borderColor: '#660033',
+    marginBottom: 12,
+  },
+  notesInput: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 16,
+    fontSize: 15,
+    color: '#1A1A1A',
+    borderWidth: 2,
+    borderColor: '#660033',
+    minHeight: 120,
+    textAlignVertical: 'top',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#FFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E5E5',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  saveButton: {
+    flex: 1,
+    backgroundColor: '#660033',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.5,
+  },
+  saveButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });
 

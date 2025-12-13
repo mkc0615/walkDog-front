@@ -16,20 +16,19 @@ import { useAuth } from "../auth-context";
 export default function EditProfileScreen() {
   const { user } = useAuth();
 
-  const [name, setName] = useState(user?.name || "");
   const [email, setEmail] = useState(user?.email || "");
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSave = async () => {
-    if (!name || !email) {
-      console.log("Name and email are required");
+    if (!email) {
+      console.log("Email is required");
       return;
     }
 
     setIsSaving(true);
 
     // TODO: Update user info in backend
-    console.log("Saving profile:", { name, email });
+    console.log("Saving profile:", { email });
 
     // Simulate API call
     setTimeout(() => {
@@ -39,6 +38,8 @@ export default function EditProfileScreen() {
   };
 
   const handleCancel = () => {
+    // Reset email to original value
+    setEmail(user?.email || "");
     router.back();
   };
 
@@ -65,7 +66,7 @@ export default function EditProfileScreen() {
           <View style={styles.avatarSection}>
             <View style={styles.avatar}>
               <Text style={styles.avatarText}>
-                {name?.charAt(0).toUpperCase() || "U"}
+                {user?.username?.charAt(0).toUpperCase() || "U"}
               </Text>
             </View>
             <TouchableOpacity style={styles.changePhotoButton}>
@@ -76,17 +77,10 @@ export default function EditProfileScreen() {
           {/* Form */}
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>
-                Name <Text style={styles.required}>*</Text>
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Your name"
-                placeholderTextColor="#999"
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-              />
+              <Text style={styles.label}>Name</Text>
+              <View style={styles.readOnlyField}>
+                <Text style={styles.readOnlyText}>{user?.username || "Not set"}</Text>
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
@@ -224,6 +218,17 @@ const styles = StyleSheet.create({
     color: "#1A1A1A",
     borderWidth: 1,
     borderColor: "#E5E5E5",
+  },
+  readOnlyField: {
+    backgroundColor: "#F5F5F5",
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+  },
+  readOnlyText: {
+    fontSize: 16,
+    color: "#666",
   },
   bottomActions: {
     flexDirection: "row",

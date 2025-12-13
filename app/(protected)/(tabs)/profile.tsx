@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,28 +11,52 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuth } from "../../auth-context";
 
-export default function ProfileScreen() {
-  const { user, logout } = useAuth();
+interface Dog {
+  dogId: number;
+  name: string;
+  breed: string;
+  age: number;
+  weight: number;
+  gender: string;
+}
 
-  // TODO: Replace with data from your backend
-  const [dogs] = useState([
-    {
-      id: "1",
-      name: "Buddy",
-      breed: "Golden Retriever",
-      age: 3,
-      weight: 30,
-      gender: "Male",
-    },
-    {
-      id: "2",
-      name: "Luna",
-      breed: "Labrador",
-      age: 2,
-      weight: 25,
-      gender: "Female",
-    },
-  ]);
+export default function ProfileScreen() {
+  const { user, logout, token } = useAuth();
+  const [dogs, setDogs] = useState<Dog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchDogs = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const apiUrl = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
+      const response = await fetch(`${apiUrl}/api/v1/dogs`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDogs(data);
+    } catch (err) {
+      console.error('Error fetching dogs:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch dogs');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDogs();
+  }, [token]);
 
   const handleLogout = async () => {
     await logout();
@@ -72,14 +97,14 @@ export default function ProfileScreen() {
             <View style={styles.avatarContainer}>
               <View style={styles.avatar}>
                 <Text style={styles.avatarText}>
-                  {user?.name?.charAt(0).toUpperCase() || "U"}
+                  {user?.username?.charAt(0).toUpperCase() || "U"}
                 </Text>
               </View>
             </View>
 
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Name</Text>
-              <Text style={styles.infoValue}>{user?.name || "Not set"}</Text>
+              <Text style={styles.infoValue}>{user?.username || "Not set"}</Text>
             </View>
 
             <View style={styles.divider} />
@@ -100,41 +125,67 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           </View>
 
-          {dogs.map((dog, index) => (
-            <View key={dog.id} style={[styles.dogCard, index > 0 && styles.dogCardSpacing]}>
-              <View style={styles.dogAvatar}>
-                <Text style={styles.dogAvatarEmoji}>🐕</Text>
-              </View>
-
-              <View style={styles.dogInfoContainer}>
-                <View style={styles.dogHeader}>
-                  <Text style={styles.dogName}>{dog.name}</Text>
-                  <TouchableOpacity onPress={() => handleEditDog(dog.id)}>
-                    <Text style={styles.dogEditButton}>Edit</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.dogDetails}>
-                  <View style={styles.dogDetailItem}>
-                    <Text style={styles.dogDetailLabel}>Breed:</Text>
-                    <Text style={styles.dogDetailValue}>{dog.breed}</Text>
-                  </View>
-                  <View style={styles.dogDetailItem}>
-                    <Text style={styles.dogDetailLabel}>Age:</Text>
-                    <Text style={styles.dogDetailValue}>{dog.age} years</Text>
-                  </View>
-                  <View style={styles.dogDetailItem}>
-                    <Text style={styles.dogDetailLabel}>Weight:</Text>
-                    <Text style={styles.dogDetailValue}>{dog.weight} kg</Text>
-                  </View>
-                  <View style={styles.dogDetailItem}>
-                    <Text style={styles.dogDetailLabel}>Gender:</Text>
-                    <Text style={styles.dogDetailValue}>{dog.gender}</Text>
-                  </View>
-                </View>
-              </View>
+          {isLoading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#660033" />
+              <Text style={styles.loadingText}>Loading your dogs...</Text>
             </View>
-          ))}
+          ) : error ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorIcon}>⚠️</Text>
+              <Text style={styles.errorText}>{error}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={fetchDogs}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : dogs.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>🐕</Text>
+              <Text style={styles.emptyText}>No dogs added yet</Text>
+              <Text style={styles.emptySubtext}>
+                Add a dog to your profile to start tracking walks
+              </Text>
+            </View>
+          ) : (
+            dogs.map((dog, index) => (
+              <View key={dog.dogId} style={[styles.dogCard, index > 0 && styles.dogCardSpacing]}>
+                <View style={styles.dogAvatar}>
+                  <Text style={styles.dogAvatarEmoji}>🐕</Text>
+                </View>
+
+                <View style={styles.dogInfoContainer}>
+                  <View style={styles.dogHeader}>
+                    <Text style={styles.dogName}>{dog.name}</Text>
+                    <TouchableOpacity onPress={() => handleEditDog(dog.dogId.toString())}>
+                      <Text style={styles.dogEditButton}>Edit</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.dogDetails}>
+                    <View style={styles.dogDetailItem}>
+                      <Text style={styles.dogDetailLabel}>Breed:</Text>
+                      <Text style={styles.dogDetailValue}>{dog.breed}</Text>
+                    </View>
+                    <View style={styles.dogDetailItem}>
+                      <Text style={styles.dogDetailLabel}>Age:</Text>
+                      <Text style={styles.dogDetailValue}>{dog.age} years</Text>
+                    </View>
+                    <View style={styles.dogDetailItem}>
+                      <Text style={styles.dogDetailLabel}>Weight:</Text>
+                      <Text style={styles.dogDetailValue}>{dog.weight} kg</Text>
+                    </View>
+                    <View style={styles.dogDetailItem}>
+                      <Text style={styles.dogDetailLabel}>Gender:</Text>
+                      <Text style={styles.dogDetailValue}>{dog.gender}</Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Action Buttons */}
@@ -359,5 +410,67 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 32,
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#666",
+  },
+  errorContainer: {
+    padding: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+  },
+  errorIcon: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#EF4444",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  retryButton: {
+    backgroundColor: "#660033",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFF",
+    borderRadius: 16,
+  },
+  emptyIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#1A1A1A",
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
   },
 });
