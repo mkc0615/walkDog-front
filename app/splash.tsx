@@ -19,18 +19,22 @@ export default function SplashScreen() {
   const paw1 = useRef(new Animated.Value(0)).current;
   const paw2 = useRef(new Animated.Value(0)).current;
   const paw3 = useRef(new Animated.Value(0)).current;
+  const paw4 = useRef(new Animated.Value(0)).current;
 
   // Animation value for title
   const titleOpacity = useRef(new Animated.Value(0)).current;
   const titleScale = useRef(new Animated.Value(0.5)).current;
 
+  // Track if animation is complete
+  const animationComplete = useRef(false);
+  const hasNavigated = useRef(false);
+
+  // Start animations on mount
   useEffect(() => {
-    // Start paw stamp animations from bottom left to upper right
     const pawDuration = 250;
     const pawDelay = 150;
 
     Animated.sequence([
-      // Paw stamps appear one by one diagonally
       Animated.timing(paw1, {
         toValue: 1,
         duration: pawDuration,
@@ -48,8 +52,13 @@ export default function SplashScreen() {
         duration: pawDuration,
         useNativeDriver: true,
       }),
+      Animated.delay(pawDelay),
+      Animated.timing(paw4, {
+        toValue: 1,
+        duration: pawDuration,
+        useNativeDriver: true,
+      }),
     ]).start(() => {
-      // After paw stamps, show title
       Animated.parallel([
         Animated.timing(titleOpacity, {
           toValue: 1,
@@ -64,26 +73,47 @@ export default function SplashScreen() {
       ]).start();
     });
 
-    // Navigate after total animation time
-    const totalAnimationTime = (pawDuration + pawDelay) * 3 + 1500;
-    const navigationTimeout = setTimeout(() => {
-      if (!isLoading) {
-        if (isAuthenticated) {
-          router.replace("/(protected)/(tabs)");
-        } else {
-          router.replace("/(auth)/login");
-        }
-      }
+    // Mark animation complete after total time
+    const totalAnimationTime = (pawDuration + pawDelay) * 4 + 1500;
+    const animationTimeout = setTimeout(() => {
+      animationComplete.current = true;
     }, totalAnimationTime);
 
-    return () => clearTimeout(navigationTimeout);
+    return () => clearTimeout(animationTimeout);
+  }, []);
+
+  // Navigate when both animation is complete and auth state is loaded
+  useEffect(() => {
+    if (hasNavigated.current) return;
+    if (isLoading) return;
+
+    // Wait a bit for animation if auth loads quickly
+    const checkAndNavigate = () => {
+      if (hasNavigated.current) return;
+      hasNavigated.current = true;
+
+      if (isAuthenticated) {
+        router.replace("/(protected)/(tabs)");
+      } else {
+        router.replace("/(public)/home");
+      }
+    };
+
+    if (animationComplete.current) {
+      checkAndNavigate();
+    } else {
+      // Wait for animation to complete (max ~3 seconds)
+      const timeout = setTimeout(checkAndNavigate, 3000);
+      return () => clearTimeout(timeout);
+    }
   }, [isAuthenticated, isLoading]);
 
   // Paw prints walking diagonally from bottom left to upper right
   const pawPrints = [
     { anim: paw1, left: width * 0.15, top: height * 0.7, rotation: -15 },
-    { anim: paw2, left: width * 0.45, top: height * 0.5, rotation: 15 },
-    { anim: paw3, left: width * 0.75, top: height * 0.3, rotation: -10 },
+    { anim: paw2, left: width * 0.45, top: height * 0.65, rotation: 15 },
+    { anim: paw3, left: width * 0.15, top: height * 0.3, rotation: -10 },
+    { anim: paw3, left: width * 0.75, top: height * 0.2, rotation: 10 },
   ];
 
   return (

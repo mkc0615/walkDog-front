@@ -1,5 +1,6 @@
 import { Redirect } from "expo-router";
 
 export default function Index() {
-  return <Redirect href="/splash" />;
+  // Always start at public home - auth redirects are handled by layouts
+  return <Redirect href="/(public)/home" />;
 }

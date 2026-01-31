@@ -12,6 +12,7 @@ import {
   View
 } from "react-native";
 import { useAuth } from "../auth-context";
+import { useGuestWalk } from "../guest-walk-context";
 
 const RegisterForm = memo(({ onSubmit, isLoading }: {
   onSubmit: (name: string, email: string, password: string, confirmPassword: string) => void;
@@ -102,20 +103,60 @@ const RegisterForm = memo(({ onSubmit, isLoading }: {
 });
 
 export default function RegisterScreen() {
-    const { register, isLoading, isAuthenticated } = useAuth();
+    const { register, isLoading, isAuthenticated, migrateGuestWalk } = useAuth();
+    const { pendingWalk, hasPendingWalk, clearPendingWalk } = useGuestWalk();
     const registerRef = useRef(register);
+    const migrateRef = useRef(migrateGuestWalk);
     registerRef.current = register;
+    migrateRef.current = migrateGuestWalk;
+    const [isMigrating, setIsMigrating] = useState(false);
 
     // Navigate when authentication state changes (after successful registration)
     useEffect(() => {
-      if (isAuthenticated) {
-        console.log("User registered and authenticated, redirecting to protected area");
-        const timeout = setTimeout(() => {
-          router.replace("/(protected)/(tabs)");
-        }, 100);
+      if (isAuthenticated && !isMigrating) {
+        console.log("User registered and authenticated, checking for pending walk...");
+
+        const handleMigration = async () => {
+          if (hasPendingWalk && pendingWalk) {
+            setIsMigrating(true);
+            console.log("Found pending walk, migrating...");
+
+            try {
+              const migrationSuccess = await migrateRef.current(pendingWalk);
+
+              if (migrationSuccess) {
+                await clearPendingWalk();
+                Alert.alert(
+                  "Walk Saved!",
+                  "Your walk has been saved to your account.",
+                  [{ text: "OK", onPress: () => router.replace("/(protected)/(tabs)/walks") }]
+                );
+              } else {
+                Alert.alert(
+                  "Migration Failed",
+                  "We couldn't save your walk. It's still stored locally - try again later.",
+                  [{ text: "OK", onPress: () => router.replace("/(protected)/(tabs)") }]
+                );
+              }
+            } catch (error) {
+              console.error("Migration error:", error);
+              Alert.alert(
+                "Error",
+                "Something went wrong while saving your walk.",
+                [{ text: "OK", onPress: () => router.replace("/(protected)/(tabs)") }]
+              );
+            } finally {
+              setIsMigrating(false);
+            }
+          } else {
+            router.replace("/(protected)/(tabs)");
+          }
+        };
+
+        const timeout = setTimeout(handleMigration, 100);
         return () => clearTimeout(timeout);
       }
-    }, [isAuthenticated]);
+    }, [isAuthenticated, hasPendingWalk, isMigrating]);
 
     const handleRegister = async (name: string, email: string, password: string, confirmPassword: string) => {
         if(!name || !email || !password || !confirmPassword) {

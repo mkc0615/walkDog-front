@@ -3,6 +3,10 @@
         "version": ">= 3.0.0"
     },
     "build": {
+        "development": {
+            "developmentClient": true,
+            "distribution": "internal"
+        },
         "preview": {
             "distribution": "internal",
             "android": {
@@ -11,6 +15,9 @@
             "ios": {
                 "simulator": true
             }
+        },
+        "production": {
+            "autoIncrement": true
         }
     },
     "submit": {}

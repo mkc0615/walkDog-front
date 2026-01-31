@@ -2,7 +2,7 @@ import { Redirect, Stack } from "expo-router";
 import { ActivityIndicator, View } from "react-native";
 import { useAuth } from "../auth-context";
 
-export default function AuthLayout() {
+export default function PublicLayout() {
   const { isAuthenticated, isLoading } = useAuth();
 
   // Show loading indicator while checking auth
@@ -14,15 +14,17 @@ export default function AuthLayout() {
     );
   }
 
-  // If already authenticated, redirect to protected area
+  // If authenticated, redirect to protected tabs
   if (isAuthenticated) {
     return <Redirect href="/(protected)/(tabs)" />;
   }
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="login" />
-      <Stack.Screen name="register" />
+      <Stack.Screen name="home" />
+      <Stack.Screen name="guestStartWalk" />
+      <Stack.Screen name="guestActiveWalk" />
+      <Stack.Screen name="guestWalkSummary" />
     </Stack>
   );
 }

@@ -22,6 +22,24 @@ type User = {
     createdAt?: string;
 }
 
+interface GuestWalkData {
+    id: string;
+    startedAt: string;
+    endedAt?: string;
+    duration: number;
+    distance: number;
+    routeCoordinates: Array<{
+        latitude: number;
+        longitude: number;
+        timestamp: number;
+        accuracy?: number;
+    }>;
+    title?: string;
+    notes?: string;
+    startLatitude: number;
+    startLongitude: number;
+}
+
 type AuthContextType = {
     user: User | null;
     token: string | null;
@@ -30,6 +48,7 @@ type AuthContextType = {
     register: (name: string, email: string, password: string) => Promise<boolean>;
     logout: () => Promise<void>;
     isAuthenticated: boolean;
+    migrateGuestWalk: (walkData: GuestWalkData) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -222,6 +241,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return `Basic ${encoded}`;
     }
 
+    const migrateGuestWalk = async (walkData: GuestWalkData): Promise<boolean> => {
+        if (!token) {
+            console.error('Cannot migrate guest walk: no auth token');
+            return false;
+        }
+
+        try {
+            // Step 1: Create the walk
+            const createResponse = await axios.post(
+                `${API_SERVICE_URL}/api/v1/walks`,
+                {
+                    title: walkData.title || 'Guest Walk',
+                    description: walkData.notes || '',
+                    dogIds: [], // Guest walks don't have dogs
+                    startLatitude: walkData.startLatitude,
+                    startLongitude: walkData.startLongitude,
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (createResponse.status !== 200 && createResponse.status !== 201) {
+                throw new Error('Failed to create walk');
+            }
+
+            const walkId = createResponse.data.walkId;
+
+            // Step 2: Send all coordinates in batches
+            if (walkData.routeCoordinates.length > 0) {
+                const trackResponse = await axios.post(
+                    `${API_SERVICE_URL}/api/v1/walks/${walkId}/track`,
+                    {
+                        coordinates: walkData.routeCoordinates,
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`,
+                        },
+                    }
+                );
+
+                if (trackResponse.status !== 200 && trackResponse.status !== 201) {
+                    console.warn('Failed to send coordinates, but walk was created');
+                }
+            }
+
+            // Step 3: Stop the walk with final stats
+            const stopResponse = await axios.post(
+                `${API_SERVICE_URL}/api/v1/walks/${walkId}/stop`,
+                {
+                    dogIds: [],
+                    duration: walkData.duration,
+                    distance: walkData.distance,
+                },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                    },
+                }
+            );
+
+            if (stopResponse.status !== 200 && stopResponse.status !== 201) {
+                console.warn('Failed to stop walk properly, but walk was created');
+            }
+
+            console.log('Guest walk migrated successfully:', walkId);
+            return true;
+        } catch (error) {
+            console.error('Error migrating guest walk:', error);
+            if (axios.isAxiosError(error) && error.response) {
+                console.error('Migration error details:', error.response.data);
+            }
+            return false;
+        }
+    };
+
     const value: AuthContextType = {
         user,
         token,
@@ -230,6 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         register,
         logout,
         isAuthenticated: !!token && !!user,
+        migrateGuestWalk,
     };
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
