@@ -1,16 +1,56 @@
+import * as Location from "expo-location";
 import { router } from "expo-router";
-import React from "react";
-import {
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from "react-native";
+import React, { useState } from "react";
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function PublicHomeScreen() {
-  const handleStartWalk = () => {
-    router.push("/(public)/guestStartWalk");
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+
+  const handleStartWalk = async () => {
+    if (isRequestingPermission) return;
+
+    setIsRequestingPermission(true);
+
+    try {
+      // Check current permission status
+      const { status: currentStatus } = await Location.getForegroundPermissionsAsync();
+
+      if (currentStatus === "granted") {
+        // Already have permission, proceed
+        router.push("/(public)/guestStartWalk");
+        return;
+      }
+
+      // Request permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+
+      if (status === "granted") {
+        // Permission granted, proceed
+        router.push("/(public)/guestStartWalk");
+      } else {
+        // Permission denied
+        Alert.alert(
+          "Location Permission Required",
+          "WalkDog needs access to your location to track your walks. Please enable location access in your device settings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            {
+              text: "Open Settings",
+              onPress: () => Location.requestForegroundPermissionsAsync(),
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("Error requesting location permission:", error);
+      Alert.alert(
+        "Error",
+        "Something went wrong while requesting location permission. Please try again."
+      );
+    } finally {
+      setIsRequestingPermission(false);
+    }
   };
 
   const handleLogin = () => {
@@ -28,44 +68,44 @@ export default function PublicHomeScreen() {
         <View style={styles.header}>
           <Text style={styles.pawIcon}>🐾</Text>
           <Text style={styles.title}>WalkDog</Text>
-          <Text style={styles.subtitle}>Track every adventure with your pup</Text>
+          <Text style={styles.subtitle}>
+            Track every adventure with your pup
+          </Text>
         </View>
 
         {/* Main Action */}
         <View style={styles.mainAction}>
-          <TouchableOpacity style={styles.startButton} onPress={handleStartWalk}>
+          <TouchableOpacity
+            style={styles.startButton}
+            onPress={handleStartWalk}
+          >
             <Text style={styles.startButtonIcon}>🚶‍♂️</Text>
             <View style={styles.startButtonTextContainer}>
               <Text style={styles.startButtonTitle}>Start Walking</Text>
               <Text style={styles.startButtonSubtitle}>No account needed</Text>
             </View>
           </TouchableOpacity>
-
-          <Text style={styles.infoText}>
-            Start a walk right away. Create an account later to save your walks and track your history.
-          </Text>
         </View>
 
         {/* Stats Prompt */}
         <View style={styles.statsPromptCard}>
-          <Text style={styles.statsPromptIcon}>📊</Text>
-          <Text style={styles.statsPromptTitle}>Your Stats</Text>
+          <Text style={styles.statsPromptTitle}>Check your Walk Stats</Text>
           <Text style={styles.statsPromptText}>
-            Log in to see your walk history, total distance, and more.
+            Start a walk right away. Create an account later to save your walks
+            and track your history and more.
           </Text>
-          <TouchableOpacity style={styles.statsLoginButton} onPress={handleLogin}>
-            <Text style={styles.statsLoginButtonText}>Log In to View Stats</Text>
-          </TouchableOpacity>
         </View>
 
         {/* Auth Links */}
         <View style={styles.authSection}>
-          <Text style={styles.authText}>Want to save your walks?</Text>
           <View style={styles.authButtons}>
             <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
               <Text style={styles.loginButtonText}>Log In</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.signUpButton} onPress={handleSignUp}>
+            <TouchableOpacity
+              style={styles.signUpButton}
+              onPress={handleSignUp}
+            >
               <Text style={styles.signUpButtonText}>Sign Up</Text>
             </TouchableOpacity>
           </View>

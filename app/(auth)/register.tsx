@@ -14,11 +14,12 @@ import {
 import { useAuth } from "../auth-context";
 import { useGuestWalk } from "../guest-walk-context";
 
-const RegisterForm = memo(({ onSubmit, isLoading }: {
+const RegisterForm = memo(({ onSubmit, isLoading, initialName }: {
   onSubmit: (name: string, email: string, password: string, confirmPassword: string) => void;
   isLoading: boolean;
+  initialName?: string;
 }) => {
-    const [name, setName] = useState("");
+    const [name, setName] = useState(initialName || "");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
@@ -104,7 +105,7 @@ const RegisterForm = memo(({ onSubmit, isLoading }: {
 
 export default function RegisterScreen() {
     const { register, isLoading, isAuthenticated, migrateGuestWalk } = useAuth();
-    const { pendingWalk, hasPendingWalk, clearPendingWalk } = useGuestWalk();
+    const { pendingWalk, hasPendingWalk, clearPendingWalk, guestUserInfo, clearGuestUserInfo } = useGuestWalk();
     const registerRef = useRef(register);
     const migrateRef = useRef(migrateGuestWalk);
     registerRef.current = register;
@@ -126,6 +127,7 @@ export default function RegisterScreen() {
 
               if (migrationSuccess) {
                 await clearPendingWalk();
+                await clearGuestUserInfo();
                 Alert.alert(
                   "Walk Saved!",
                   "Your walk has been saved to your account.",
@@ -194,7 +196,11 @@ export default function RegisterScreen() {
             <Text style={styles.subtitle}>Start tracking adventures with your pup</Text>
             </View>
 
-            <RegisterForm onSubmit={handleRegister} isLoading={isLoading} />
+            <RegisterForm
+              onSubmit={handleRegister}
+              isLoading={isLoading}
+              initialName={guestUserInfo?.name}
+            />
             </ScrollView>
             </KeyboardAvoidingView>
         </View>

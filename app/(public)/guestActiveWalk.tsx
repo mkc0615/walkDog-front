@@ -232,8 +232,14 @@ export default function GuestActiveWalkScreen() {
         {/* Overlay - Guest Mode Indicator */}
         <View style={styles.topOverlay}>
           <View style={styles.guestCard}>
-            <Text style={styles.guestIcon}>🚶</Text>
-            <Text style={styles.guestText}>Guest Walk</Text>
+            <Text style={styles.guestIcon}>
+              {activeWalk?.guestUserInfo?.dogName ? "🐕" : "🚶"}
+            </Text>
+            <Text style={styles.guestText}>
+              {activeWalk?.guestUserInfo?.dogName
+                ? `Walking with ${activeWalk.guestUserInfo.dogName}`
+                : "Guest Walk"}
+            </Text>
           </View>
         </View>
 

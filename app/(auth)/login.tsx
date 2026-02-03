@@ -81,7 +81,7 @@ const LoginForm = memo(({ onSubmit, isLoading }: {
 
 export default function LoginScreen() {
     const { login, isLoading, isAuthenticated, migrateGuestWalk } = useAuth();
-    const { pendingWalk, hasPendingWalk, clearPendingWalk } = useGuestWalk();
+    const { pendingWalk, hasPendingWalk, clearPendingWalk, clearGuestUserInfo } = useGuestWalk();
     const loginRef = useRef(login);
     const migrateRef = useRef(migrateGuestWalk);
     loginRef.current = login;
@@ -103,6 +103,7 @@ export default function LoginScreen() {
 
               if (migrationSuccess) {
                 await clearPendingWalk();
+                await clearGuestUserInfo();
                 Alert.alert(
                   "Walk Saved!",
                   "Your walk has been saved to your account.",

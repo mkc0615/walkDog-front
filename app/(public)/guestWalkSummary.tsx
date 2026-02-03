@@ -9,7 +9,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import MapView, { Polyline, UrlTile } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -99,7 +99,7 @@ export default function GuestWalkSummaryScreen() {
             router.replace("/(public)/home");
           },
         },
-      ]
+      ],
     );
   };
 
@@ -121,7 +121,9 @@ export default function GuestWalkSummaryScreen() {
           {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Walk Complete!</Text>
-            <Text style={styles.headerSubtitle}>Great job! Here's your summary.</Text>
+            <Text style={styles.headerSubtitle}>
+              Great job! Here's your summary.
+            </Text>
           </View>
 
           {/* Map Preview */}
@@ -206,11 +208,13 @@ export default function GuestWalkSummaryScreen() {
 
           {/* Save Prompt Card */}
           <View style={styles.savePromptCard}>
-            <Text style={styles.savePromptIcon}>💾</Text>
             <View style={styles.savePromptContent}>
-              <Text style={styles.savePromptTitle}>Want to keep this walk?</Text>
+              <Text style={styles.savePromptTitle}>
+                Want to keep this walk?
+              </Text>
               <Text style={styles.savePromptText}>
-                Log in or create an account to save your walk and track your history.
+                Log in or create an account to save your walk and track your
+                history.
               </Text>
             </View>
           </View>
@@ -218,7 +222,10 @@ export default function GuestWalkSummaryScreen() {
 
         {/* Bottom Actions */}
         <View style={styles.bottomActions}>
-          <TouchableOpacity style={styles.discardButton} onPress={handleDiscard}>
+          <TouchableOpacity
+            style={styles.discardButton}
+            onPress={handleDiscard}
+          >
             <Text style={styles.discardButtonText}>Discard</Text>
           </TouchableOpacity>
 

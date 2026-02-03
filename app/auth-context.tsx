@@ -101,11 +101,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const storedUser = await storage.getItem(USER_KEY);
 
             if (storedToken && storedUser) {
-                setToken(storedToken);
-                setUser(JSON.parse(storedUser));
+                try {
+                    // Validate token by fetching user profile
+                    const validatedUser = await fetchUserProfile(storedToken);
+
+                    if (validatedUser) {
+                        // Token is still valid
+                        setToken(storedToken);
+                        setUser(validatedUser);
+                        // Update stored user data with fresh data
+                        await storage.setItem(USER_KEY, JSON.stringify(validatedUser));
+                    } else {
+                        // Token is invalid or expired - clear stored auth
+                        console.log('Stored token is invalid or expired, logging out');
+                        await storage.deleteItem(TOKEN_KEY);
+                        await storage.deleteItem(USER_KEY);
+                    }
+                } catch (validationError) {
+                    // Network error - keep the stored session (user might be offline)
+                    if (validationError instanceof Error && validationError.message === 'NETWORK_ERROR') {
+                        console.log('Offline mode: using stored auth data');
+                        setToken(storedToken);
+                        setUser(JSON.parse(storedUser));
+                    } else {
+                        throw validationError;
+                    }
+                }
             }
         } catch (error) {
             console.error('Error loading stored auth:', error);
+            // On error, clear potentially corrupted auth data
+            try {
+                await storage.deleteItem(TOKEN_KEY);
+                await storage.deleteItem(USER_KEY);
+            } catch (clearError) {
+                console.error('Error clearing auth data:', clearError);
+            }
         } finally {
             setIsLoading(false);
         }
@@ -117,7 +148,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${accessToken}`,
-                }
+                },
+                timeout: 10000, // 10 second timeout
             });
 
             if (response.status === 200 && response.data) {
@@ -125,6 +157,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
             return null;
         } catch (error) {
+            if (axios.isAxiosError(error)) {
+                // 401/403 means token is invalid or expired
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    console.log('Token is invalid or expired (401/403)');
+                    return null;
+                }
+                // Network error - could be offline, don't invalidate token
+                if (!error.response) {
+                    console.log('Network error while validating token, keeping session');
+                    // Return a special marker to indicate network error
+                    throw new Error('NETWORK_ERROR');
+                }
+            }
             console.error('Error fetching user profile:', error);
             return null;
         }

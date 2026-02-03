@@ -3,6 +3,12 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Coordinate, CoordinateWithTimestamp } from './utils/walk-utils';
 
 const PENDING_WALK_KEY = 'pending_guest_walk';
+const GUEST_USER_KEY = 'guest_user_info';
+
+export interface GuestUserInfo {
+  name?: string;
+  dogName?: string;
+}
 
 export interface GuestWalkData {
   id: string;
@@ -15,6 +21,7 @@ export interface GuestWalkData {
   notes?: string;
   startLatitude: number;
   startLongitude: number;
+  guestUserInfo?: GuestUserInfo;
 }
 
 interface ActiveWalkState {
@@ -24,12 +31,13 @@ interface ActiveWalkState {
   notes?: string;
   startLatitude: number;
   startLongitude: number;
+  guestUserInfo?: GuestUserInfo;
 }
 
 interface GuestWalkContextType {
   // Active walk state (while walking)
   activeWalk: ActiveWalkState | null;
-  startWalk: (startCoord: Coordinate, title?: string, notes?: string) => string;
+  startWalk: (startCoord: Coordinate, title?: string, notes?: string, guestUserInfo?: GuestUserInfo) => string;
   endWalk: (duration: number, distance: number, routeCoordinates: CoordinateWithTimestamp[]) => Promise<void>;
   cancelWalk: () => void;
 
@@ -39,6 +47,11 @@ interface GuestWalkContextType {
   updatePendingWalk: (updates: Partial<Pick<GuestWalkData, 'title' | 'notes'>>) => Promise<void>;
   clearPendingWalk: () => Promise<void>;
   getPendingWalk: () => Promise<GuestWalkData | null>;
+
+  // Guest user info (persisted separately for registration)
+  guestUserInfo: GuestUserInfo | null;
+  setGuestUserInfo: (info: GuestUserInfo) => Promise<void>;
+  clearGuestUserInfo: () => Promise<void>;
 
   // Loading state
   isLoading: boolean;
@@ -53,27 +66,45 @@ function generateWalkId(): string {
 export function GuestWalkProvider({ children }: { children: React.ReactNode }) {
   const [activeWalk, setActiveWalk] = useState<ActiveWalkState | null>(null);
   const [pendingWalk, setPendingWalk] = useState<GuestWalkData | null>(null);
+  const [guestUserInfo, setGuestUserInfoState] = useState<GuestUserInfo | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load pending walk from AsyncStorage on mount
+  // Load pending walk and guest user info from AsyncStorage on mount
   useEffect(() => {
-    loadPendingWalk();
+    loadStoredData();
   }, []);
 
-  const loadPendingWalk = async () => {
+  const loadStoredData = async () => {
     try {
-      const stored = await AsyncStorage.getItem(PENDING_WALK_KEY);
-      if (stored) {
-        setPendingWalk(JSON.parse(stored));
+      const [storedWalk, storedUserInfo] = await Promise.all([
+        AsyncStorage.getItem(PENDING_WALK_KEY),
+        AsyncStorage.getItem(GUEST_USER_KEY),
+      ]);
+
+      if (storedWalk) {
+        setPendingWalk(JSON.parse(storedWalk));
+      }
+      if (storedUserInfo) {
+        setGuestUserInfoState(JSON.parse(storedUserInfo));
       }
     } catch (error) {
-      console.error('Error loading pending walk:', error);
+      console.error('Error loading stored data:', error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const startWalk = (startCoord: Coordinate, title?: string, notes?: string): string => {
+  const setGuestUserInfo = async (info: GuestUserInfo) => {
+    await AsyncStorage.setItem(GUEST_USER_KEY, JSON.stringify(info));
+    setGuestUserInfoState(info);
+  };
+
+  const clearGuestUserInfo = async () => {
+    await AsyncStorage.removeItem(GUEST_USER_KEY);
+    setGuestUserInfoState(null);
+  };
+
+  const startWalk = (startCoord: Coordinate, title?: string, notes?: string, userInfo?: GuestUserInfo): string => {
     const id = generateWalkId();
     const walk: ActiveWalkState = {
       id,
@@ -82,8 +113,15 @@ export function GuestWalkProvider({ children }: { children: React.ReactNode }) {
       notes,
       startLatitude: startCoord.latitude,
       startLongitude: startCoord.longitude,
+      guestUserInfo: userInfo,
     };
     setActiveWalk(walk);
+
+    // Also persist guest user info if provided
+    if (userInfo && (userInfo.name || userInfo.dogName)) {
+      setGuestUserInfo(userInfo);
+    }
+
     return id;
   };
 
@@ -107,6 +145,7 @@ export function GuestWalkProvider({ children }: { children: React.ReactNode }) {
       notes: activeWalk.notes,
       startLatitude: activeWalk.startLatitude,
       startLongitude: activeWalk.startLongitude,
+      guestUserInfo: activeWalk.guestUserInfo,
     };
 
     // Save to AsyncStorage
@@ -153,6 +192,9 @@ export function GuestWalkProvider({ children }: { children: React.ReactNode }) {
     updatePendingWalk,
     clearPendingWalk,
     getPendingWalk,
+    guestUserInfo,
+    setGuestUserInfo,
+    clearGuestUserInfo,
     isLoading,
   };
 

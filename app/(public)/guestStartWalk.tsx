@@ -16,29 +16,26 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useGuestWalk } from "../guest-walk-context";
 
 export default function GuestStartWalkScreen() {
+  const [userName, setUserName] = useState("");
+  const [dogName, setDogName] = useState("");
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
   const [isStarting, setIsStarting] = useState(false);
-  const { startWalk } = useGuestWalk();
+  const { startWalk, guestUserInfo } = useGuestWalk();
+
+  // Pre-fill with saved guest info if available
+  React.useEffect(() => {
+    if (guestUserInfo) {
+      if (guestUserInfo.name) setUserName(guestUserInfo.name);
+      if (guestUserInfo.dogName) setDogName(guestUserInfo.dogName);
+    }
+  }, [guestUserInfo]);
 
   const handleStartWalk = async () => {
     setIsStarting(true);
 
     try {
-      // Request location permission
-      const { status } = await Location.requestForegroundPermissionsAsync();
-
-      if (status !== "granted") {
-        Alert.alert(
-          "Location Permission Required",
-          "Please enable location access to track your walk.",
-          [{ text: "OK" }]
-        );
-        setIsStarting(false);
-        return;
-      }
-
-      // Get current location
+      // Get current location (permission already granted from home screen)
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
@@ -48,8 +45,12 @@ export default function GuestStartWalkScreen() {
         longitude: location.coords.longitude,
       };
 
-      // Start walk in context
-      startWalk(startCoord, title.trim() || undefined, notes.trim() || undefined);
+      // Start walk in context with guest user info
+      const guestInfo = {
+        name: userName.trim() || undefined,
+        dogName: dogName.trim() || undefined,
+      };
+      startWalk(startCoord, title.trim() || undefined, notes.trim() || undefined, guestInfo);
 
       // Navigate to active walk screen
       router.push("/(public)/guestActiveWalk");
@@ -98,6 +99,34 @@ export default function GuestStartWalkScreen() {
                 Your walk will be saved locally. Log in after to keep it forever.
               </Text>
             </View>
+          </View>
+
+          {/* Your Name Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Your Name (Optional)</Text>
+            <TextInput
+              style={styles.titleInput}
+              placeholder="Enter your name..."
+              placeholderTextColor="#999"
+              value={userName}
+              onChangeText={setUserName}
+              maxLength={50}
+              autoCapitalize="words"
+            />
+          </View>
+
+          {/* Dog Name Section */}
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Dog's Name (Optional)</Text>
+            <TextInput
+              style={styles.titleInput}
+              placeholder="Enter your dog's name..."
+              placeholderTextColor="#999"
+              value={dogName}
+              onChangeText={setDogName}
+              maxLength={50}
+              autoCapitalize="words"
+            />
           </View>
 
           {/* Location Section */}
