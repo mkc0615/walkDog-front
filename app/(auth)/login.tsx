@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import * as Location from "expo-location";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -13,46 +13,102 @@ import {
 } from "react-native";
 import { useAuth } from "../auth-context";
 import { useGuestWalk } from "../guest-walk-context";
+import { validateLoginForm, sanitizeInput, PASSWORD_MIN_LENGTH } from "../utils/validation";
+import { checkRateLimit, recordFailedAttempt, recordSuccessfulAttempt, RATE_LIMIT_ACTIONS } from "../utils/rate-limiter";
 
 // Separate form component to avoid re-renders triggering useAuth()
-const LoginForm = memo(({ onSubmit, isLoading }: {
+const LoginForm = memo(({ onSubmit, isLoading, rateLimitMessage, isRateLimited }: {
   onSubmit: (email: string, password: string) => void;
   isLoading: boolean;
+  rateLimitMessage: string;
+  isRateLimited: boolean;
 }) => {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+    const [touched, setTouched] = useState<{ email?: boolean; password?: boolean }>({});
+
+    const handleEmailChange = (text: string) => {
+      setEmail(text);
+      // Clear error when user starts typing
+      if (errors.email) {
+        setErrors(prev => ({ ...prev, email: undefined }));
+      }
+    };
+
+    const handlePasswordChange = (text: string) => {
+      setPassword(text);
+      if (errors.password) {
+        setErrors(prev => ({ ...prev, password: undefined }));
+      }
+    };
+
+    const handleBlur = (field: 'email' | 'password') => {
+      setTouched(prev => ({ ...prev, [field]: true }));
+    };
 
     const handleSubmit = () => {
-      onSubmit(email, password);
+      // Mark all fields as touched
+      setTouched({ email: true, password: true });
+
+      // Validate
+      const validation = validateLoginForm(email, password);
+
+      if (!validation.isValid) {
+        setErrors(validation.errors);
+        return;
+      }
+
+      // Sanitize and submit
+      onSubmit(sanitizeInput(email), password);
     };
+
+    const isDisabled = isLoading || isRateLimited;
 
     return (
         <View style={styles.form}>
+            {/* Rate limit warning */}
+            {rateLimitMessage ? (
+              <View style={styles.rateLimitBanner}>
+                <Text style={styles.rateLimitText}>{rateLimitMessage}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Email</Text>
                 <TextInput
-                style={styles.input}
+                style={[styles.input, touched.email && errors.email && styles.inputError]}
                 placeholder="your@email.com"
                 placeholderTextColor="#999"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={handleEmailChange}
+                onBlur={() => handleBlur('email')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
+                editable={!isRateLimited}
                 />
+                {touched.email && errors.email && (
+                  <Text style={styles.errorText}>{errors.email}</Text>
+                )}
             </View>
 
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Password</Text>
                 <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
+                style={[styles.input, touched.password && errors.password && styles.inputError]}
+                placeholder={`Min ${PASSWORD_MIN_LENGTH} characters`}
                 placeholderTextColor="#999"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={handlePasswordChange}
+                onBlur={() => handleBlur('password')}
                 secureTextEntry
                 autoComplete="password"
+                editable={!isRateLimited}
                 />
+                {touched.password && errors.password && (
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                )}
             </View>
 
             <TouchableOpacity>
@@ -60,12 +116,12 @@ const LoginForm = memo(({ onSubmit, isLoading }: {
             </TouchableOpacity>
 
             <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
+                style={[styles.button, isDisabled && styles.buttonDisabled]}
                 onPress={handleSubmit}
-                disabled={isLoading}
+                disabled={isDisabled}
             >
                 <Text style={styles.buttonText}>
-                {isLoading ? 'Logging in...' : 'Log In'}
+                {isLoading ? 'Logging in...' : isRateLimited ? 'Please wait...' : 'Log In'}
                 </Text>
             </TouchableOpacity>
 
@@ -87,6 +143,38 @@ export default function LoginScreen() {
     loginRef.current = login;
     migrateRef.current = migrateGuestWalk;
     const [isMigrating, setIsMigrating] = useState(false);
+
+    // Rate limiting state
+    const [rateLimitMessage, setRateLimitMessage] = useState("");
+    const [isRateLimited, setIsRateLimited] = useState(false);
+    const rateLimitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Check rate limit status and update UI
+    const updateRateLimitStatus = useCallback(() => {
+      const status = checkRateLimit(RATE_LIMIT_ACTIONS.LOGIN);
+      setIsRateLimited(!status.allowed);
+      setRateLimitMessage(status.message);
+
+      // If rate limited, schedule a re-check
+      if (!status.allowed && status.waitMs > 0) {
+        if (rateLimitTimerRef.current) {
+          clearTimeout(rateLimitTimerRef.current);
+        }
+        rateLimitTimerRef.current = setTimeout(() => {
+          updateRateLimitStatus();
+        }, Math.min(status.waitMs, 1000)); // Update every second or when limit expires
+      }
+    }, []);
+
+    // Check rate limit on mount and cleanup
+    useEffect(() => {
+      updateRateLimitStatus();
+      return () => {
+        if (rateLimitTimerRef.current) {
+          clearTimeout(rateLimitTimerRef.current);
+        }
+      };
+    }, [updateRateLimitStatus]);
 
     // Navigate when authentication state changes
     useEffect(() => {
@@ -137,15 +225,23 @@ export default function LoginScreen() {
     }, [isAuthenticated, hasPendingWalk, isMigrating]);
 
     const handleLogin = async (email: string, password: string) => {
-        if(!email || !password) {
-          console.log("invalid email or password");
-            return;
+        // Check rate limit before attempting login
+        const rateLimitStatus = checkRateLimit(RATE_LIMIT_ACTIONS.LOGIN);
+        if (!rateLimitStatus.allowed) {
+          setRateLimitMessage(rateLimitStatus.message);
+          setIsRateLimited(true);
+          updateRateLimitStatus();
+          return;
         }
 
         const success = await loginRef.current(email, password);
 
         if (success) {
           console.log("Login success !!!");
+          // Record successful attempt (resets rate limit)
+          recordSuccessfulAttempt(RATE_LIMIT_ACTIONS.LOGIN);
+          setRateLimitMessage("");
+          setIsRateLimited(false);
 
           // Request location permissions after successful login
           try {
@@ -162,6 +258,9 @@ export default function LoginScreen() {
           }
         } else {
           console.log("Login failed, staying on login screen");
+          // Record failed attempt
+          recordFailedAttempt(RATE_LIMIT_ACTIONS.LOGIN);
+          updateRateLimitStatus();
         }
     };
 
@@ -177,7 +276,12 @@ export default function LoginScreen() {
             <Text style={styles.subtitle}>Track every adventure with your pup</Text>
             </View>
 
-            <LoginForm onSubmit={handleLogin} isLoading={isLoading} />
+            <LoginForm
+              onSubmit={handleLogin}
+              isLoading={isLoading}
+              rateLimitMessage={rateLimitMessage}
+              isRateLimited={isRateLimited}
+            />
             </KeyboardAvoidingView>
         </View>
     );
@@ -214,6 +318,19 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
+  rateLimitBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#DC2626',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  rateLimitText: {
+    color: '#DC2626',
+    fontSize: 14,
+    textAlign: 'center',
+  },
   inputContainer: {
     marginBottom: 20,
   },
@@ -231,6 +348,15 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     borderWidth: 1,
     borderColor: '#E5E5E5',
+  },
+  inputError: {
+    borderColor: '#DC2626',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 12,
+    marginTop: 4,
   },
   forgotPassword: {
     color: '#660033',

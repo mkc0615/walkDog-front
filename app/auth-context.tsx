@@ -1,18 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { Alert, Platform } from 'react-native';
-import base64 from 'react-native-base64';
-
-// Cross-platform alert helper
-const showAlert = (title: string, message?: string) => {
-    if (Platform.OS === 'web') {
-        window.alert(message ? `${title}\n${message}` : title);
-    } else {
-        Alert.alert(title, message);
-    }
-};
+import { Alert } from 'react-native';
+import { enforceHttps, validateSecureUrl, isProduction } from './utils/api-client';
 
 type User = {
     userId?: number;
@@ -54,34 +44,99 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const TOKEN_KEY = 'auth_token';
+const REFRESH_TOKEN_KEY = 'refresh_token';
 const USER_KEY = 'user_data';
 
-let AUTH_SERVICE_URL = process.env.EXPO_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:9011';
-let API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010';
-let CLIENT_ID = process.env.CLIENT_ID || 'dev';
-let CLIENT_PW = process.env.CLIENT_PW || 'secret';
+// Enforce HTTPS in production
+const API_SERVICE_URL = enforceHttps(process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://localhost:9010');
 
-// Storage wrapper that uses SecureStore on native and AsyncStorage on web
+// Validate URL on module load
+if (isProduction) {
+    validateSecureUrl(API_SERVICE_URL);
+}
+
+// Token refresh buffer - refresh 5 minutes before expiration
+const TOKEN_REFRESH_BUFFER_SECONDS = 5 * 60;
+
+// JWT utility functions
+interface JWTPayload {
+    exp?: number;
+    iat?: number;
+    sub?: string;
+    [key: string]: unknown;
+}
+
+/**
+ * Decode JWT token payload without verification (for client-side expiration check)
+ * Note: This does NOT verify the signature - that's the server's job
+ */
+function decodeJWT(token: string): JWTPayload | null {
+    try {
+        const parts = token.split('.');
+        if (parts.length !== 3) {
+            return null;
+        }
+
+        // Decode base64url to base64, then decode
+        const payload = parts[1]
+            .replace(/-/g, '+')
+            .replace(/_/g, '/');
+
+        // Add padding if needed
+        const padded = payload + '='.repeat((4 - payload.length % 4) % 4);
+
+        // Decode base64 to string
+        const decoded = atob(padded);
+
+        return JSON.parse(decoded) as JWTPayload;
+    } catch (error) {
+        console.error('Error decoding JWT:', error);
+        return null;
+    }
+}
+
+/**
+ * Check if a token is expired or will expire within the buffer period
+ */
+function isTokenExpiredOrExpiring(token: string, bufferSeconds: number = TOKEN_REFRESH_BUFFER_SECONDS): boolean {
+    const payload = decodeJWT(token);
+
+    if (!payload || !payload.exp) {
+        // If we can't decode or no exp claim, assume it might be expired
+        return true;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    const expiresAt = payload.exp;
+
+    // Token is expired or will expire within buffer period
+    return now >= (expiresAt - bufferSeconds);
+}
+
+/**
+ * Get seconds until token expires (negative if already expired)
+ */
+function getTokenTimeRemaining(token: string): number | null {
+    const payload = decodeJWT(token);
+
+    if (!payload || !payload.exp) {
+        return null;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    return payload.exp - now;
+}
+
+// Secure storage using SecureStore (native only - no web support)
 const storage = {
     async getItem(key: string): Promise<string | null> {
-        if (Platform.OS === 'web') {
-            return await AsyncStorage.getItem(key);
-        }
         return await SecureStore.getItemAsync(key);
     },
     async setItem(key: string, value: string): Promise<void> {
-        if (Platform.OS === 'web') {
-            await AsyncStorage.setItem(key, value);
-        } else {
-            await SecureStore.setItemAsync(key, value);
-        }
+        await SecureStore.setItemAsync(key, value);
     },
     async deleteItem(key: string): Promise<void> {
-        if (Platform.OS === 'web') {
-            await AsyncStorage.removeItem(key);
-        } else {
-            await SecureStore.deleteItemAsync(key);
-        }
+        await SecureStore.deleteItemAsync(key);
     },
 };
 
@@ -98,47 +153,220 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const loadStoredAuth = async () => {
         try {
             const storedToken = await storage.getItem(TOKEN_KEY);
+            const storedRefreshToken = await storage.getItem(REFRESH_TOKEN_KEY);
             const storedUser = await storage.getItem(USER_KEY);
 
             if (storedToken && storedUser) {
-                try {
-                    // Validate token by fetching user profile
-                    const validatedUser = await fetchUserProfile(storedToken);
+                // Check token expiration locally first (more efficient)
+                const timeRemaining = getTokenTimeRemaining(storedToken);
 
-                    if (validatedUser) {
-                        // Token is still valid
-                        setToken(storedToken);
-                        setUser(validatedUser);
-                        // Update stored user data with fresh data
-                        await storage.setItem(USER_KEY, JSON.stringify(validatedUser));
-                    } else {
-                        // Token is invalid or expired - clear stored auth
-                        console.log('Stored token is invalid or expired, logging out');
-                        await storage.deleteItem(TOKEN_KEY);
-                        await storage.deleteItem(USER_KEY);
+                if (timeRemaining !== null) {
+                    console.log(`Token time remaining: ${timeRemaining}s`);
+                }
+
+                // If token is not expired (with buffer), use it directly
+                if (timeRemaining !== null && timeRemaining > TOKEN_REFRESH_BUFFER_SECONDS) {
+                    console.log('Token still valid, using stored auth');
+                    setToken(storedToken);
+                    setUser(JSON.parse(storedUser));
+
+                    // Optionally validate with server in background (non-blocking)
+                    fetchUserProfile(storedToken).then(async (validatedUser) => {
+                        if (validatedUser) {
+                            await storage.setItem(USER_KEY, JSON.stringify(validatedUser));
+                            setUser(validatedUser);
+                        }
+                    }).catch(() => {
+                        // Ignore background validation errors
+                    });
+
+                    return;
+                }
+
+                // Token expired or expiring soon - try to refresh
+                if (storedRefreshToken) {
+                    console.log('Token expired or expiring, attempting to refresh...');
+
+                    try {
+                        const newTokens = await refreshAccessToken(storedRefreshToken);
+
+                        if (newTokens) {
+                            // Refresh successful, validate new token
+                            const validatedUser = await fetchUserProfile(newTokens.accessToken);
+
+                            if (validatedUser) {
+                                // Store new tokens
+                                await storage.setItem(TOKEN_KEY, newTokens.accessToken);
+                                await storage.setItem(REFRESH_TOKEN_KEY, newTokens.refreshToken);
+                                await storage.setItem(USER_KEY, JSON.stringify(validatedUser));
+
+                                setToken(newTokens.accessToken);
+                                setUser(validatedUser);
+                                console.log('Token refreshed successfully on startup');
+                                return;
+                            }
+                        }
+
+                        // Refresh failed or new token invalid
+                        console.log('Token refresh failed, clearing auth');
+                        await clearStoredAuth();
+                    } catch (refreshError) {
+                        // Network error during refresh - use stored data if token not fully expired
+                        if (refreshError instanceof Error && refreshError.message === 'NETWORK_ERROR') {
+                            if (timeRemaining !== null && timeRemaining > 0) {
+                                console.log('Offline mode: using stored auth (token not fully expired)');
+                                setToken(storedToken);
+                                setUser(JSON.parse(storedUser));
+                                return;
+                            }
+                        }
+                        throw refreshError;
                     }
-                } catch (validationError) {
-                    // Network error - keep the stored session (user might be offline)
-                    if (validationError instanceof Error && validationError.message === 'NETWORK_ERROR') {
-                        console.log('Offline mode: using stored auth data');
-                        setToken(storedToken);
-                        setUser(JSON.parse(storedUser));
-                    } else {
-                        throw validationError;
+                } else {
+                    // No refresh token - try to validate current token
+                    try {
+                        const validatedUser = await fetchUserProfile(storedToken);
+
+                        if (validatedUser) {
+                            setToken(storedToken);
+                            setUser(validatedUser);
+                            await storage.setItem(USER_KEY, JSON.stringify(validatedUser));
+                        } else {
+                            console.log('Token invalid and no refresh token available');
+                            await clearStoredAuth();
+                        }
+                    } catch (validationError) {
+                        if (validationError instanceof Error && validationError.message === 'NETWORK_ERROR') {
+                            // Offline - use stored data even if might be expired
+                            console.log('Offline mode: using stored auth data');
+                            setToken(storedToken);
+                            setUser(JSON.parse(storedUser));
+                        } else {
+                            throw validationError;
+                        }
                     }
                 }
             }
         } catch (error) {
             console.error('Error loading stored auth:', error);
             // On error, clear potentially corrupted auth data
-            try {
-                await storage.deleteItem(TOKEN_KEY);
-                await storage.deleteItem(USER_KEY);
-            } catch (clearError) {
-                console.error('Error clearing auth data:', clearError);
-            }
+            await clearStoredAuth();
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const clearStoredAuth = async () => {
+        try {
+            await storage.deleteItem(TOKEN_KEY);
+            await storage.deleteItem(REFRESH_TOKEN_KEY);
+            await storage.deleteItem(USER_KEY);
+        } catch (clearError) {
+            console.error('Error clearing auth data:', clearError);
+        }
+    };
+
+    // Helper to make authenticated API calls with automatic token refresh
+    const authenticatedRequest = async <T,>(
+        requestFn: (accessToken: string) => Promise<T>
+    ): Promise<T> => {
+        if (!token) {
+            throw new Error('Not authenticated');
+        }
+
+        let currentToken = token;
+
+        // Proactively check if token is expired or about to expire
+        if (isTokenExpiredOrExpiring(currentToken)) {
+            const timeRemaining = getTokenTimeRemaining(currentToken);
+            console.log(`Token expiring soon (${timeRemaining}s remaining), proactively refreshing...`);
+
+            const storedRefreshToken = await storage.getItem(REFRESH_TOKEN_KEY);
+
+            if (storedRefreshToken) {
+                const newTokens = await refreshAccessToken(storedRefreshToken);
+
+                if (newTokens) {
+                    // Store new tokens
+                    await storage.setItem(TOKEN_KEY, newTokens.accessToken);
+                    await storage.setItem(REFRESH_TOKEN_KEY, newTokens.refreshToken);
+                    setToken(newTokens.accessToken);
+                    currentToken = newTokens.accessToken;
+                    console.log('Token proactively refreshed successfully');
+                } else {
+                    // Refresh failed, but token might still work - try anyway
+                    console.log('Proactive refresh failed, trying with current token');
+                }
+            }
+        }
+
+        try {
+            return await requestFn(currentToken);
+        } catch (error) {
+            // Check if it's a 401 error and we have a refresh token (fallback)
+            if (axios.isAxiosError(error) && error.response?.status === 401) {
+                const storedRefreshToken = await storage.getItem(REFRESH_TOKEN_KEY);
+
+                if (storedRefreshToken) {
+                    console.log('Access token rejected (401), attempting refresh...');
+                    const newTokens = await refreshAccessToken(storedRefreshToken);
+
+                    if (newTokens) {
+                        // Store new tokens
+                        await storage.setItem(TOKEN_KEY, newTokens.accessToken);
+                        await storage.setItem(REFRESH_TOKEN_KEY, newTokens.refreshToken);
+                        setToken(newTokens.accessToken);
+
+                        // Retry the request with new token
+                        return await requestFn(newTokens.accessToken);
+                    } else {
+                        // Refresh failed, logout user
+                        console.log('Token refresh failed, logging out');
+                        await clearStoredAuth();
+                        setToken(null);
+                        setUser(null);
+                    }
+                }
+            }
+            throw error;
+        }
+    };
+
+    const refreshAccessToken = async (refreshToken: string): Promise<{ accessToken: string; refreshToken: string } | null> => {
+        try {
+            const response = await axios.post(
+                `${API_SERVICE_URL}/api/v1/auth/refresh`,
+                { refresh_token: refreshToken },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 10000,
+                }
+            );
+
+            const newAccessToken = response.data.access_token || response.data.token;
+            const newRefreshToken = response.data.refresh_token || refreshToken; // Use old refresh token if not rotated
+
+            if (!newAccessToken) {
+                return null;
+            }
+
+            return { accessToken: newAccessToken, refreshToken: newRefreshToken };
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                // 401/403 means refresh token is invalid or expired
+                if (error.response?.status === 401 || error.response?.status === 403) {
+                    console.log('Refresh token is invalid or expired');
+                    return null;
+                }
+                // Network error
+                if (!error.response) {
+                    throw new Error('NETWORK_ERROR');
+                }
+            }
+            console.error('Error refreshing token:', error);
+            return null;
         }
     };
 
@@ -175,31 +403,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const login = async (username: string, password: string): Promise<boolean> => {
+    const login = async (email: string, password: string): Promise<boolean> => {
         try {
             setIsLoading(true);
 
-            const params = new URLSearchParams();
-            params.append('grant_type', 'password');
-            params.append('username', username);
-            params.append('password', password);
-            params.append('scope', 'user');
-            
-            const authHeader = encodeBasicAuth(`${CLIENT_ID}`, `${CLIENT_PW}`);
-            const response = await axios.post(`${AUTH_SERVICE_URL}/oauth2/token`, params, {
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Authorization': authHeader
+            // Login through API server (backend handles OAuth client credentials securely)
+            const response = await axios.post(
+                `${API_SERVICE_URL}/api/v1/auth/login`,
+                { email, password },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 15000,
                 }
-            });
+            );
 
             const accessToken = response.data.access_token || response.data.token;
+            const refreshToken = response.data.refresh_token;
+
             if (!accessToken) {
                 throw new Error('No access token in response');
             }
 
-            // Store token
+            // Store tokens securely
             await storage.setItem(TOKEN_KEY, accessToken);
+            if (refreshToken) {
+                await storage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+            }
 
             // Fetch user profile details
             const userProfile = await fetchUserProfile(accessToken);
@@ -210,7 +441,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             // Store user data
             await storage.setItem(USER_KEY, JSON.stringify(userProfile));
 
-            // Batch state updates to reduce re-renders
+            // Update state
             setToken(accessToken);
             setUser(userProfile);
             setIsLoading(false);
@@ -219,9 +450,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } catch (error) {
             console.error('Login error:', error);
             if (axios.isAxiosError(error) && error.response) {
-                showAlert('Login Failed', error.response.data?.message || error.message);
+                const message = error.response.data?.message || error.response.data?.error || 'Invalid credentials';
+                Alert.alert('Login Failed', message);
+            } else if (axios.isAxiosError(error) && !error.response) {
+                Alert.alert('Connection Error', 'Unable to connect to server. Please check your internet connection.');
             } else {
-                showAlert('Login Failed', 'An unexpected error occurred');
+                Alert.alert('Login Failed', 'An unexpected error occurred');
             }
             return false;
         } finally {
@@ -233,15 +467,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
             setIsLoading(true);
 
-            const response = await axios.post(`${API_SERVICE_URL}/api/v1/users/register`, {
-                username,
-                email,
-                password
-            }, {
-                headers: {
-                    'Content-Type': 'application/json',
+            const response = await axios.post(
+                `${API_SERVICE_URL}/api/v1/auth/register`,
+                { username, email, password },
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    timeout: 15000,
                 }
-            });
+            );
 
             // After successful registration, automatically log in the user
             if (response.status === 200 || response.status === 201) {
@@ -252,9 +487,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             return true;
         } catch (error) {
             if (axios.isAxiosError(error) && error.response) {
-                showAlert('Registration Failed', error.response.data?.message || error.message);
+                const message = error.response.data?.message || error.response.data?.error || 'Registration failed';
+                Alert.alert('Registration Failed', message);
+            } else if (axios.isAxiosError(error) && !error.response) {
+                Alert.alert('Connection Error', 'Unable to connect to server. Please check your internet connection.');
             } else {
-                showAlert('Registration Failed', 'An unexpected error occurred');
+                Alert.alert('Registration Failed', 'An unexpected error occurred');
             }
             return false;
         } finally {
@@ -267,8 +505,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setIsLoading(true);
 
             // Clear stored credentials
-            await storage.deleteItem(TOKEN_KEY);
-            await storage.deleteItem(USER_KEY);
+            await clearStoredAuth();
 
             setToken(null);
             setUser(null);
@@ -280,12 +517,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
     };
 
-    const encodeBasicAuth = (clientId: string, clientSecret: string) => {
-        const raw = `${clientId}:${clientSecret}`;
-        const encoded = base64.encode(raw);
-        return `Basic ${encoded}`;
-    }
-
     const migrateGuestWalk = async (walkData: GuestWalkData): Promise<boolean> => {
         if (!token) {
             console.error('Cannot migrate guest walk: no auth token');
@@ -293,72 +524,74 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         try {
-            // Step 1: Create the walk
-            const createResponse = await axios.post(
-                `${API_SERVICE_URL}/api/v1/walks`,
-                {
-                    title: walkData.title || 'Guest Walk',
-                    description: walkData.notes || '',
-                    dogIds: [], // Guest walks don't have dogs
-                    startLatitude: walkData.startLatitude,
-                    startLongitude: walkData.startLongitude,
-                },
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
-                    },
-                }
-            );
-
-            if (createResponse.status !== 200 && createResponse.status !== 201) {
-                throw new Error('Failed to create walk');
-            }
-
-            const walkId = createResponse.data.walkId;
-
-            // Step 2: Send all coordinates in batches
-            if (walkData.routeCoordinates.length > 0) {
-                const trackResponse = await axios.post(
-                    `${API_SERVICE_URL}/api/v1/walks/${walkId}/track`,
+            return await authenticatedRequest(async (accessToken) => {
+                // Step 1: Create the walk
+                const createResponse = await axios.post(
+                    `${API_SERVICE_URL}/api/v1/walks`,
                     {
-                        coordinates: walkData.routeCoordinates,
+                        title: walkData.title || 'Guest Walk',
+                        description: walkData.notes || '',
+                        dogIds: [], // Guest walks don't have dogs
+                        startLatitude: walkData.startLatitude,
+                        startLongitude: walkData.startLongitude,
                     },
                     {
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${token}`,
+                            'Authorization': `Bearer ${accessToken}`,
                         },
                     }
                 );
 
-                if (trackResponse.status !== 200 && trackResponse.status !== 201) {
-                    console.warn('Failed to send coordinates, but walk was created');
+                if (createResponse.status !== 200 && createResponse.status !== 201) {
+                    throw new Error('Failed to create walk');
                 }
-            }
 
-            // Step 3: Stop the walk with final stats
-            const stopResponse = await axios.post(
-                `${API_SERVICE_URL}/api/v1/walks/${walkId}/stop`,
-                {
-                    dogIds: [],
-                    duration: walkData.duration,
-                    distance: walkData.distance,
-                },
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`,
+                const walkId = createResponse.data.walkId;
+
+                // Step 2: Send all coordinates in batches
+                if (walkData.routeCoordinates.length > 0) {
+                    const trackResponse = await axios.post(
+                        `${API_SERVICE_URL}/api/v1/walks/${walkId}/track`,
+                        {
+                            coordinates: walkData.routeCoordinates,
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${accessToken}`,
+                            },
+                        }
+                    );
+
+                    if (trackResponse.status !== 200 && trackResponse.status !== 201) {
+                        console.warn('Failed to send coordinates, but walk was created');
+                    }
+                }
+
+                // Step 3: Stop the walk with final stats
+                const stopResponse = await axios.post(
+                    `${API_SERVICE_URL}/api/v1/walks/${walkId}/stop`,
+                    {
+                        dogIds: [],
+                        duration: walkData.duration,
+                        distance: walkData.distance,
                     },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${accessToken}`,
+                        },
+                    }
+                );
+
+                if (stopResponse.status !== 200 && stopResponse.status !== 201) {
+                    console.warn('Failed to stop walk properly, but walk was created');
                 }
-            );
 
-            if (stopResponse.status !== 200 && stopResponse.status !== 201) {
-                console.warn('Failed to stop walk properly, but walk was created');
-            }
-
-            console.log('Guest walk migrated successfully:', walkId);
-            return true;
+                console.log('Guest walk migrated successfully:', walkId);
+                return true;
+            });
         } catch (error) {
             console.error('Error migrating guest walk:', error);
             if (axios.isAxiosError(error) && error.response) {

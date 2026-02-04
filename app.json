@@ -32,12 +32,9 @@
       ],
       "package": "com.walkdog"
     },
-    "web": {
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
+      "./plugins/withNetworkSecurityConfig",
       [
         "expo-splash-screen",
         {

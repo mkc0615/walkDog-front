@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { memo, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -13,83 +13,165 @@ import {
 } from "react-native";
 import { useAuth } from "../auth-context";
 import { useGuestWalk } from "../guest-walk-context";
+import { validateRegisterForm, sanitizeInput, PASSWORD_MIN_LENGTH } from "../utils/validation";
+import { checkRateLimit, recordFailedAttempt, recordSuccessfulAttempt, RATE_LIMIT_ACTIONS } from "../utils/rate-limiter";
 
-const RegisterForm = memo(({ onSubmit, isLoading, initialName }: {
-  onSubmit: (name: string, email: string, password: string, confirmPassword: string) => void;
+const RegisterForm = memo(({ onSubmit, isLoading, initialName, rateLimitMessage, isRateLimited }: {
+  onSubmit: (name: string, email: string, password: string) => void;
   isLoading: boolean;
   initialName?: string;
+  rateLimitMessage: string;
+  isRateLimited: boolean;
 }) => {
     const [name, setName] = useState(initialName || "");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
+    const [errors, setErrors] = useState<{
+      name?: string;
+      email?: string;
+      password?: string;
+      confirmPassword?: string;
+    }>({});
+    const [touched, setTouched] = useState<{
+      name?: boolean;
+      email?: boolean;
+      password?: boolean;
+      confirmPassword?: boolean;
+    }>({});
+
+    const handleChange = (field: string, value: string) => {
+      switch (field) {
+        case 'name':
+          setName(value);
+          break;
+        case 'email':
+          setEmail(value);
+          break;
+        case 'password':
+          setPassword(value);
+          break;
+        case 'confirmPassword':
+          setConfirmPassword(value);
+          break;
+      }
+      // Clear error when user starts typing
+      if (errors[field as keyof typeof errors]) {
+        setErrors(prev => ({ ...prev, [field]: undefined }));
+      }
+    };
+
+    const handleBlur = (field: string) => {
+      setTouched(prev => ({ ...prev, [field]: true }));
+    };
 
     const handleSubmit = () => {
-        onSubmit(name, email, password, confirmPassword);
+      // Mark all fields as touched
+      setTouched({ name: true, email: true, password: true, confirmPassword: true });
+
+      // Validate
+      const validation = validateRegisterForm(name, email, password, confirmPassword);
+
+      if (!validation.isValid) {
+        setErrors(validation.errors);
+        return;
+      }
+
+      // Sanitize and submit (don't sanitize password)
+      onSubmit(sanitizeInput(name), sanitizeInput(email), password);
     };
+
+    const isDisabled = isLoading || isRateLimited;
 
     return (
         <View style={styles.form}>
+            {/* Rate limit warning */}
+            {rateLimitMessage ? (
+              <View style={styles.rateLimitBanner}>
+                <Text style={styles.rateLimitText}>{rateLimitMessage}</Text>
+              </View>
+            ) : null}
+
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Name</Text>
                 <TextInput
-                style={styles.input}
+                style={[styles.input, touched.name && errors.name && styles.inputError]}
                 placeholder="Your name"
                 placeholderTextColor="#999"
                 value={name}
-                onChangeText={setName}
+                onChangeText={(text) => handleChange('name', text)}
+                onBlur={() => handleBlur('name')}
                 autoCapitalize="words"
                 autoComplete="name"
+                editable={!isRateLimited}
                 />
+                {touched.name && errors.name && (
+                  <Text style={styles.errorText}>{errors.name}</Text>
+                )}
             </View>
 
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Email</Text>
                 <TextInput
-                style={styles.input}
+                style={[styles.input, touched.email && errors.email && styles.inputError]}
                 placeholder="your@email.com"
                 placeholderTextColor="#999"
                 value={email}
-                onChangeText={setEmail}
+                onChangeText={(text) => handleChange('email', text)}
+                onBlur={() => handleBlur('email')}
                 keyboardType="email-address"
                 autoCapitalize="none"
                 autoComplete="email"
+                editable={!isRateLimited}
                 />
+                {touched.email && errors.email && (
+                  <Text style={styles.errorText}>{errors.email}</Text>
+                )}
             </View>
 
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Password</Text>
                 <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
+                style={[styles.input, touched.password && errors.password && styles.inputError]}
+                placeholder={`Min ${PASSWORD_MIN_LENGTH} characters`}
                 placeholderTextColor="#999"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={(text) => handleChange('password', text)}
+                onBlur={() => handleBlur('password')}
                 secureTextEntry
                 autoComplete="password-new"
+                editable={!isRateLimited}
                 />
+                {touched.password && errors.password && (
+                  <Text style={styles.errorText}>{errors.password}</Text>
+                )}
             </View>
 
             <View style={styles.inputContainer}>
                 <Text style={styles.label}>Confirm Password</Text>
                 <TextInput
-                style={styles.input}
+                style={[styles.input, touched.confirmPassword && errors.confirmPassword && styles.inputError]}
                 placeholder="Re-enter your password"
                 placeholderTextColor="#999"
                 value={confirmPassword}
-                onChangeText={setConfirmPassword}
+                onChangeText={(text) => handleChange('confirmPassword', text)}
+                onBlur={() => handleBlur('confirmPassword')}
                 secureTextEntry
                 autoComplete="password-new"
+                editable={!isRateLimited}
                 />
+                {touched.confirmPassword && errors.confirmPassword && (
+                  <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+                )}
             </View>
 
             <TouchableOpacity
-                style={[styles.button, isLoading && styles.buttonDisabled]}
+                style={[styles.button, isDisabled && styles.buttonDisabled]}
                 onPress={handleSubmit}
-                disabled={isLoading}
+                disabled={isDisabled}
             >
                 <Text style={styles.buttonText}>
-                {isLoading ? 'Creating account...' : 'Sign Up'}
+                {isLoading ? 'Creating account...' : isRateLimited ? 'Please wait...' : 'Sign Up'}
                 </Text>
             </TouchableOpacity>
 
@@ -111,6 +193,38 @@ export default function RegisterScreen() {
     registerRef.current = register;
     migrateRef.current = migrateGuestWalk;
     const [isMigrating, setIsMigrating] = useState(false);
+
+    // Rate limiting state
+    const [rateLimitMessage, setRateLimitMessage] = useState("");
+    const [isRateLimited, setIsRateLimited] = useState(false);
+    const rateLimitTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Check rate limit status and update UI
+    const updateRateLimitStatus = useCallback(() => {
+      const status = checkRateLimit(RATE_LIMIT_ACTIONS.REGISTER);
+      setIsRateLimited(!status.allowed);
+      setRateLimitMessage(status.message);
+
+      // If rate limited, schedule a re-check
+      if (!status.allowed && status.waitMs > 0) {
+        if (rateLimitTimerRef.current) {
+          clearTimeout(rateLimitTimerRef.current);
+        }
+        rateLimitTimerRef.current = setTimeout(() => {
+          updateRateLimitStatus();
+        }, Math.min(status.waitMs, 1000));
+      }
+    }, []);
+
+    // Check rate limit on mount and cleanup
+    useEffect(() => {
+      updateRateLimitStatus();
+      return () => {
+        if (rateLimitTimerRef.current) {
+          clearTimeout(rateLimitTimerRef.current);
+        }
+      };
+    }, [updateRateLimitStatus]);
 
     // Navigate when authentication state changes (after successful registration)
     useEffect(() => {
@@ -160,14 +274,13 @@ export default function RegisterScreen() {
       }
     }, [isAuthenticated, hasPendingWalk, isMigrating]);
 
-    const handleRegister = async (name: string, email: string, password: string, confirmPassword: string) => {
-        if(!name || !email || !password || !confirmPassword) {
-          Alert.alert("All fields are required");
-          return;
-        }
-
-        if(password !== confirmPassword) {
-          Alert.alert("Passwords don't match");
+    const handleRegister = async (name: string, email: string, password: string) => {
+        // Check rate limit before attempting registration
+        const rateLimitStatus = checkRateLimit(RATE_LIMIT_ACTIONS.REGISTER);
+        if (!rateLimitStatus.allowed) {
+          setRateLimitMessage(rateLimitStatus.message);
+          setIsRateLimited(true);
+          updateRateLimitStatus();
           return;
         }
 
@@ -175,8 +288,15 @@ export default function RegisterScreen() {
 
         if (success) {
           console.log("Registration success !!!");
+          // Record successful attempt (resets rate limit)
+          recordSuccessfulAttempt(RATE_LIMIT_ACTIONS.REGISTER);
+          setRateLimitMessage("");
+          setIsRateLimited(false);
         } else {
           console.log("Registration failed, staying on register screen");
+          // Record failed attempt
+          recordFailedAttempt(RATE_LIMIT_ACTIONS.REGISTER);
+          updateRateLimitStatus();
         }
     };
 
@@ -200,6 +320,8 @@ export default function RegisterScreen() {
               onSubmit={handleRegister}
               isLoading={isLoading}
               initialName={guestUserInfo?.name}
+              rateLimitMessage={rateLimitMessage}
+              isRateLimited={isRateLimited}
             />
             </ScrollView>
             </KeyboardAvoidingView>
@@ -242,6 +364,19 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
   },
+  rateLimitBanner: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#DC2626',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 20,
+  },
+  rateLimitText: {
+    color: '#DC2626',
+    fontSize: 14,
+    textAlign: 'center',
+  },
   inputContainer: {
     marginBottom: 20,
   },
@@ -259,6 +394,15 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     borderWidth: 1,
     borderColor: '#E5E5E5',
+  },
+  inputError: {
+    borderColor: '#DC2626',
+    borderWidth: 1,
+  },
+  errorText: {
+    color: '#DC2626',
+    fontSize: 12,
+    marginTop: 4,
   },
   button: {
     backgroundColor: '#660033',
