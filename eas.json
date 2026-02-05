@@ -7,8 +7,8 @@
             "developmentClient": true,
             "distribution": "internal",
             "env": {
-                "EXPO_PUBLIC_API_SERVICE_URL": "http://192.168.45.145:9010",
-                "EXPO_PUBLIC_MAP_TILER_KEY": "WGfvGyQKf0zmOKem5KSO"
+                "EXPO_PUBLIC_API_SERVICE_URL": "",
+                "EXPO_PUBLIC_MAP_TILER_KEY": ""
             }
         },
         "preview": {
@@ -20,8 +20,8 @@
                 "simulator": true
             },
             "env": {
-                "EXPO_PUBLIC_API_SERVICE_URL": "http://192.168.45.145:9010",
-                "EXPO_PUBLIC_MAP_TILER_KEY": "WGfvGyQKf0zmOKem5KSO"
+                "EXPO_PUBLIC_API_SERVICE_URL": "",
+                "EXPO_PUBLIC_MAP_TILER_KEY": ""
             }
         },
         "production": {
