@@ -13,7 +13,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuth } from '../auth-context';
+import { useAuth } from '@/lib/auth-context';
 
 interface WalkDetail {
   walkId: number;

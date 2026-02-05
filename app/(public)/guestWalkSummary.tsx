@@ -1,6 +1,7 @@
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -13,8 +14,8 @@ import {
 } from "react-native";
 import MapView, { Polyline, UrlTile } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useGuestWalk } from "../guest-walk-context";
-import { formatDistance, formatDuration } from "../utils/walk-utils";
+import { useGuestWalk } from "@/lib/guest-walk-context";
+import { formatDistance, formatDuration } from "@/lib/utils/walk-utils";
 
 export default function GuestWalkSummaryScreen() {
   const { pendingWalk, updatePendingWalk, clearPendingWalk } = useGuestWalk();
@@ -22,46 +23,22 @@ export default function GuestWalkSummaryScreen() {
   const [notes, setNotes] = useState(pendingWalk?.notes || "");
   const [isSaving, setIsSaving] = useState(false);
 
-  if (!pendingWalk) {
-    // No pending walk, go back to home
-    router.replace("/(public)/home");
-    return null;
-  }
-
-  // Calculate route bounds for map
-  const getMapRegion = () => {
-    const coords = pendingWalk.routeCoordinates;
-    if (coords.length === 0) {
-      return {
-        latitude: pendingWalk.startLatitude,
-        longitude: pendingWalk.startLongitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      };
+  // Redirect to home if no pending walk
+  useEffect(() => {
+    if (!pendingWalk) {
+      router.replace("/(public)/home");
     }
+  }, [pendingWalk]);
 
-    let minLat = coords[0].latitude;
-    let maxLat = coords[0].latitude;
-    let minLon = coords[0].longitude;
-    let maxLon = coords[0].longitude;
-
-    coords.forEach((coord) => {
-      minLat = Math.min(minLat, coord.latitude);
-      maxLat = Math.max(maxLat, coord.latitude);
-      minLon = Math.min(minLon, coord.longitude);
-      maxLon = Math.max(maxLon, coord.longitude);
-    });
-
-    const latDelta = (maxLat - minLat) * 1.5 || 0.01;
-    const lonDelta = (maxLon - minLon) * 1.5 || 0.01;
-
-    return {
-      latitude: (minLat + maxLat) / 2,
-      longitude: (minLon + maxLon) / 2,
-      latitudeDelta: Math.max(latDelta, 0.005),
-      longitudeDelta: Math.max(lonDelta, 0.005),
-    };
-  };
+  if (!pendingWalk) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <ActivityIndicator size="large" color="#660033" />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   const handleSaveWalk = async () => {
     setIsSaving(true);
@@ -108,6 +85,35 @@ export default function GuestWalkSummaryScreen() {
     return (pendingWalk.distance / (pendingWalk.duration / 3600)).toFixed(1);
   };
 
+  // Calculate map region to fit all coordinates
+  const getMapRegion = () => {
+    if (pendingWalk.routeCoordinates.length === 0) {
+      return {
+        latitude: 0,
+        longitude: 0,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      };
+    }
+
+    const lats = pendingWalk.routeCoordinates.map((c) => c.latitude);
+    const lngs = pendingWalk.routeCoordinates.map((c) => c.longitude);
+    const minLat = Math.min(...lats);
+    const maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs);
+    const maxLng = Math.max(...lngs);
+
+    const latDelta = Math.max((maxLat - minLat) * 1.5, 0.01);
+    const lngDelta = Math.max((maxLng - minLng) * 1.5, 0.01);
+
+    return {
+      latitude: (minLat + maxLat) / 2,
+      longitude: (minLng + maxLng) / 2,
+      latitudeDelta: latDelta,
+      longitudeDelta: lngDelta,
+    };
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -126,31 +132,38 @@ export default function GuestWalkSummaryScreen() {
             </Text>
           </View>
 
-          {/* Map Preview */}
+          {/* Walk Route Map */}
           <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              initialRegion={getMapRegion()}
-              scrollEnabled={false}
-              zoomEnabled={false}
-              rotateEnabled={false}
-              pitchEnabled={false}
-            >
-              <UrlTile
-                urlTemplate={`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAP_TILER_KEY}`}
-                maximumZ={22}
-                flipY={false}
-              />
-              {pendingWalk.routeCoordinates.length > 1 && (
+            {pendingWalk.routeCoordinates.length > 0 ? (
+              <MapView
+                style={styles.map}
+                initialRegion={getMapRegion()}
+                mapType="none"
+                scrollEnabled={false}
+                zoomEnabled={false}
+                rotateEnabled={false}
+                pitchEnabled={false}
+              >
+                {/* MapTiler OpenStreetMap Tiles */}
+                <UrlTile
+                  urlTemplate={`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAP_TILER_KEY}`}
+                  maximumZ={22}
+                  flipY={false}
+                />
+                {/* Route Polyline */}
                 <Polyline
                   coordinates={pendingWalk.routeCoordinates}
                   strokeColor="#660033"
                   strokeWidth={4}
-                  lineCap="round"
-                  lineJoin="round"
                 />
-              )}
-            </MapView>
+              </MapView>
+            ) : (
+              <View style={styles.walkSummaryCard}>
+                <Text style={styles.walkSummaryIcon}>🎉</Text>
+                <Text style={styles.walkSummaryTitle}>Walk Recorded!</Text>
+                <Text style={styles.walkSummaryText}>No GPS points tracked</Text>
+              </View>
+            )}
           </View>
 
           {/* Stats Grid */}
@@ -283,6 +296,26 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  walkSummaryCard: {
+    flex: 1,
+    backgroundColor: "#F0FDF4",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  walkSummaryIcon: {
+    fontSize: 48,
+    marginBottom: 12,
+  },
+  walkSummaryTitle: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#166534",
+    marginBottom: 4,
+  },
+  walkSummaryText: {
+    fontSize: 14,
+    color: "#666",
   },
   statsGrid: {
     flexDirection: "row",

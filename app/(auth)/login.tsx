@@ -11,10 +11,10 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useAuth } from "../auth-context";
-import { useGuestWalk } from "../guest-walk-context";
-import { validateLoginForm, sanitizeInput, PASSWORD_MIN_LENGTH } from "../utils/validation";
-import { checkRateLimit, recordFailedAttempt, recordSuccessfulAttempt, RATE_LIMIT_ACTIONS } from "../utils/rate-limiter";
+import { useAuth } from "@/lib/auth-context";
+import { useGuestWalk } from "@/lib/guest-walk-context";
+import { validateLoginForm, sanitizeInput, PASSWORD_MIN_LENGTH } from "@/lib/utils/validation";
+import { checkRateLimit, recordFailedAttempt, recordSuccessfulAttempt, RATE_LIMIT_ACTIONS } from "@/lib/utils/rate-limiter";
 
 // Separate form component to avoid re-renders triggering useAuth()
 const LoginForm = memo(({ onSubmit, isLoading, rateLimitMessage, isRateLimited }: {

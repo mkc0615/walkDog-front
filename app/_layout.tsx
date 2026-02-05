@@ -1,7 +1,7 @@
 import { Stack } from "expo-router";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { AuthProvider } from "./auth-context";
-import { GuestWalkProvider } from "./guest-walk-context";
+import { AuthProvider } from "@/lib/auth-context";
+import { GuestWalkProvider } from "@/lib/guest-walk-context";
 
 export default function RootLayout() {
   return (

@@ -11,10 +11,10 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useAuth } from "../auth-context";
-import { useGuestWalk } from "../guest-walk-context";
-import { validateRegisterForm, sanitizeInput, PASSWORD_MIN_LENGTH } from "../utils/validation";
-import { checkRateLimit, recordFailedAttempt, recordSuccessfulAttempt, RATE_LIMIT_ACTIONS } from "../utils/rate-limiter";
+import { useAuth } from "@/lib/auth-context";
+import { useGuestWalk } from "@/lib/guest-walk-context";
+import { validateRegisterForm, sanitizeInput, PASSWORD_MIN_LENGTH } from "@/lib/utils/validation";
+import { checkRateLimit, recordFailedAttempt, recordSuccessfulAttempt, RATE_LIMIT_ACTIONS } from "@/lib/utils/rate-limiter";
 
 const RegisterForm = memo(({ onSubmit, isLoading, initialName, rateLimitMessage, isRateLimited }: {
   onSubmit: (name: string, email: string, password: string) => void;

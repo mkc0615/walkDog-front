@@ -10,13 +10,13 @@ import {
 } from "react-native";
 import MapView, { Polyline, UrlTile } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useGuestWalk } from "../guest-walk-context";
+import { useGuestWalk } from "@/lib/guest-walk-context";
 import {
   calculateDistance,
   Coordinate,
   CoordinateWithTimestamp,
   formatDuration,
-} from "../utils/walk-utils";
+} from "@/lib/utils/walk-utils";
 
 export default function GuestActiveWalkScreen() {
   const [isPaused, setIsPaused] = useState(false);
@@ -199,33 +199,37 @@ export default function GuestActiveWalkScreen() {
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             }}
+            region={{
+              latitude: currentLocation.latitude,
+              longitude: currentLocation.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            }}
+            mapType="none"
             showsUserLocation={true}
             followsUserLocation={true}
             showsMyLocationButton={false}
           >
-            {/* MapTiler Tiles */}
+            {/* MapTiler OpenStreetMap Tiles */}
             <UrlTile
               urlTemplate={`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAP_TILER_KEY}`}
               maximumZ={22}
               flipY={false}
             />
-
             {/* Route Polyline */}
             {routeCoordinates.length > 1 && (
               <Polyline
                 coordinates={routeCoordinates}
                 strokeColor="#660033"
                 strokeWidth={4}
-                lineCap="round"
-                lineJoin="round"
               />
             )}
           </MapView>
         ) : (
           <View style={styles.mapPlaceholder}>
             <Text style={styles.mapIcon}>🗺️</Text>
-            <Text style={styles.mapText}>Loading Map...</Text>
-            <Text style={styles.mapSubtext}>Requesting location permissions</Text>
+            <Text style={styles.mapText}>Loading...</Text>
+            <Text style={styles.mapSubtext}>Getting your location</Text>
           </View>
         )}
 
@@ -241,13 +245,6 @@ export default function GuestActiveWalkScreen() {
                 : "Guest Walk"}
             </Text>
           </View>
-        </View>
-
-        {/* Map Attribution */}
-        <View style={styles.attributionOverlay}>
-          <Text style={styles.attributionText}>
-            © MapTiler © OpenStreetMap contributors
-          </Text>
         </View>
       </View>
 
@@ -320,6 +317,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#E5E7EB",
     justifyContent: "center",
     alignItems: "center",
+  },
+  locationDisplay: {
+    flex: 1,
+    backgroundColor: "#F0FDF4",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  locationIcon: {
+    fontSize: 64,
+    marginBottom: 16,
+  },
+  locationText: {
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#166534",
+    marginBottom: 8,
+  },
+  coordsText: {
+    fontSize: 14,
+    color: "#666",
+    fontFamily: "monospace",
   },
   mapIcon: {
     fontSize: 64,

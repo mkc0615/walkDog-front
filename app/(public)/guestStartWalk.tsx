@@ -13,7 +13,7 @@ import {
   View
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useGuestWalk } from "../guest-walk-context";
+import { useGuestWalk } from "@/lib/guest-walk-context";
 
 export default function GuestStartWalkScreen() {
   const [userName, setUserName] = useState("");

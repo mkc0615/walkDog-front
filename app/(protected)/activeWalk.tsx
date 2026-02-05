@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import MapView, { Polyline, UrlTile } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useAuth } from "../auth-context";
+import { useAuth } from "@/lib/auth-context";
 
 interface Coordinate {
   latitude: number;

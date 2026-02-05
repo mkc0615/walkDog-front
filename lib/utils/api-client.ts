@@ -6,37 +6,50 @@ const API_SERVICE_URL = process.env.EXPO_PUBLIC_API_SERVICE_URL || 'http://local
 const isProduction = process.env.NODE_ENV === 'production' || !__DEV__;
 
 /**
+ * Check if URL is a local/private network address (for testing)
+ */
+function isLocalOrPrivateNetwork(url: string): boolean {
+    return (
+        url.includes('localhost') ||
+        url.includes('127.0.0.1') ||
+        url.includes('10.0.2.2') ||      // Android emulator
+        url.includes('10.0.3.2') ||      // Genymotion emulator
+        /192\.168\.\d+\.\d+/.test(url) || // Private network 192.168.x.x
+        /10\.\d+\.\d+\.\d+/.test(url) ||  // Private network 10.x.x.x
+        /172\.(1[6-9]|2\d|3[01])\.\d+\.\d+/.test(url) // Private network 172.16-31.x.x
+    );
+}
+
+/**
  * Validate that a URL uses HTTPS in production
- * Allows HTTP for localhost (dev/testing)
+ * Allows HTTP for local/private networks (dev/testing)
  */
 function validateSecureUrl(url: string): void {
-    // Allow localhost HTTP in any environment (for testing)
-    const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1') || url.includes('10.0.2.2');
-    if (isLocalhost) {
+    // Allow HTTP for local/private network addresses (for testing)
+    if (isLocalOrPrivateNetwork(url)) {
         if (isProduction) {
-            console.warn('Warning: Using HTTP localhost URL. This will not work on a physical device.');
+            console.warn('Warning: Using HTTP with local/private network URL for testing.');
         }
         return;
     }
 
-    // In production, require HTTPS for all non-localhost URLs
+    // In production, require HTTPS for public URLs
     if (isProduction && !url.startsWith('https://')) {
         throw new Error(`Security Error: API URL must use HTTPS in production. Got: ${url}`);
     }
 }
 
 /**
- * Upgrade HTTP to HTTPS in production (if not localhost)
+ * Upgrade HTTP to HTTPS in production (if not local/private network)
  */
 function enforceHttps(url: string): string {
     if (!isProduction) {
         return url;
     }
 
-    // Don't upgrade localhost URLs
-    const isLocalhost = url.includes('localhost') || url.includes('127.0.0.1') || url.includes('10.0.2.2');
-    if (isLocalhost) {
-        console.warn('Warning: Using HTTP localhost URL in production build');
+    // Don't upgrade local/private network URLs (for testing)
+    if (isLocalOrPrivateNetwork(url)) {
+        console.warn('Warning: Using HTTP with local/private network URL in production build');
         return url;
     }
 
@@ -124,4 +137,4 @@ export function createAuthHeaders(token: string): Record<string, string> {
 }
 
 // Export utilities
-export { validateSecureUrl, enforceHttps, isProduction };
+export { validateSecureUrl, enforceHttps, isProduction, isLocalOrPrivateNetwork };
