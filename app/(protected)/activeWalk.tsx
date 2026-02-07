@@ -318,17 +318,17 @@ export default function ActiveWalkScreen() {
               latitudeDelta: 0.01,
               longitudeDelta: 0.01,
             }}
+            mapType="none"
             showsUserLocation={true}
             followsUserLocation={true}
             showsMyLocationButton={false}
           >
-            {/* MapTiler Tiles */}
+            {/* MapTiler OpenStreetMap Tiles */}
             <UrlTile
               urlTemplate={`https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=${process.env.EXPO_PUBLIC_MAP_TILER_KEY}`}
               maximumZ={22}
               flipY={false}
             />
-
             {/* Route Polyline */}
             {routeCoordinates.length > 1 && (
               <Polyline

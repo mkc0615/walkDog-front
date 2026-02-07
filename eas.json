@@ -1,32 +1,42 @@
 {
-    "cli": {
-        "version": ">= 3.0.0"
+  "cli": {
+    "version": ">= 3.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_SERVICE_URL": "http://192.168.45.145:9010",
+        "EXPO_PUBLIC_MAP_TILER_KEY": "WGfvGyQKf0zmOKem5KSO"
+      }
     },
     "build": {
-        "development": {
-            "developmentClient": true,
-            "distribution": "internal",
-            "env": {
-                "EXPO_PUBLIC_API_SERVICE_URL": "",
-                "EXPO_PUBLIC_MAP_TILER_KEY": ""
-            }
-        },
-        "preview": {
-            "distribution": "internal",
-            "android": {
-                "buildType": "apk"
-            },
-            "ios": {
-                "simulator": true
-            },
-            "env": {
-                "EXPO_PUBLIC_API_SERVICE_URL": "",
-                "EXPO_PUBLIC_MAP_TILER_KEY": ""
-            }
-        },
-        "production": {
-            "autoIncrement": true
+      "development": {
+        "developmentClient": true,
+        "distribution": "internal",
+        "env": {
+          "EXPO_PUBLIC_API_SERVICE_URL": "",
+          "EXPO_PUBLIC_MAP_TILER_KEY": ""
         }
+      },
+      "preview": {
+        "distribution": "internal",
+        "android": {
+          "buildType": "apk"
+        },
+        "ios": {
+          "simulator": true
+        },
+        "env": {
+          "EXPO_PUBLIC_API_SERVICE_URL": "http://192.168.45.145:9010",
+          "EXPO_PUBLIC_MAP_TILER_KEY": "WGfvGyQKf0zmOKem5KSO"
+        }
+      },
+      "production": {
+        "autoIncrement": true
+      }
     },
     "submit": {}
+  }
 }
